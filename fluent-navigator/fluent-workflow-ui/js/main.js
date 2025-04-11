@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
   fitScreenBtn.addEventListener('click', () => visualizer.fitToScreen());
 
   // Pre-populate the textarea with template.json content
-  fetch('/template.json')
+  fetch('template.json')
     .then(response => {
       if (!response.ok) throw new Error('Template not found');
       return response.text();
