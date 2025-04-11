@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Catalogue Network Location Visualizer</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        #visualization {
+            width: 100%;
+            height: 900px;
+            border: 1px solid #ccc;
+            overflow: auto;
+        }
+        .node circle {
+            fill: #fff;
+            stroke: steelblue;
+            stroke-width: 3px;
+        }
+        .node text {
+            font: 12px sans-serif;
+        }
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 2px;
+        }
+        .retailer circle { fill: #fd8d3c; }
+        .virtualcatalogue circle { fill: #74c476; }
+        .network circle { fill: #9e9ac8; }
+        .location circle { fill: #6baed6; }
+        .tooltip {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+            font-size: 14px;
+            max-width: 300px;
+        }
+        
+        /* Styles for collapse/expand indicators */
+        .node--has-children circle {
+            cursor: pointer;
+        }
+        
+        /* Style for the expand/collapse indicator */
+        .collapse-indicator {
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            dominant-baseline: middle;
+            text-anchor: middle;
+        }
+    </style>
+</head>
+<body>
+    <h1>Virtual Catalogue Network Location Visualizer</h1>
+    <div id="visualization"></div>
+
+    <script>
+        // Fetch the data
+        fetch('data.json')
+            .then(response => response.json())
+            .then(data => {
+                createVisualization(data);
+            })
+            .catch(error => console.error('Error loading data:', error));
+
+        function createVisualization(data) {
+            // Set up dimensions
+            const width = 1800;
+            const height = 1000;
+            const margin = { top: 60, right: 120, bottom: 60, left: 120 };
+            
+            // Function to collapse node and all its children
+            function collapse(d) {
+                if (d.children) {
+                    d._children = d.children;
+                    d._children.forEach(collapse);
+                    d.children = null;
+                }
+            }
+            
+            // Function to expand a node (only one level)
+            function expand(d) {
+                if (d._children) {
+                    d.children = d._children;
+                    d._children = null;
+                }
+            }
+            
+            // Function to toggle node expansion state
+            function toggleNode(d) {
+                if (d.children) {
+                    collapse(d);
+                } else if (d._children) {
+                    expand(d);
+                }
+                update(d);
+            }
+            
+            // Create a hierarchy from the data
+            const root = d3.hierarchy(data);
+            
+            // Collapse all retailers by default
+            root.children.forEach(collapse);
+            
+            // Initial position
+            root.x0 = height / 2;
+            root.y0 = 0;
+            
+            // Create SVG
+            const svg = d3.select("#visualization")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+            
+            // Create a tooltip
+            const tooltip = d3.select("body")
+                .append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0);
+                
+            // Main update function that refreshes the visualization
+            function update(source) {
+                // Create a cluster layout
+                const cluster = d3.cluster()
+                    .size([height - margin.top - margin.bottom, width - margin.left - margin.right]);
+                
+                // Compute the new tree layout
+                const nodes = root.descendants();
+                const links = root.links();
+                cluster(root);
+                
+                // Normalize for fixed-depth
+                nodes.forEach(d => {
+                    d.y = d.depth * 180;
+                });
+                
+                // Update the nodes
+                const node = svg.selectAll(".node")
+                    .data(nodes, d => d.id || (d.id = ++nodeId));
+                
+                // Enter new nodes
+                const nodeEnter = node.enter().append("g")
+                    .attr("class", d => {
+                        let classNames = "node";
+                        if (d.depth === 0) classNames += " root";
+                        else if (d.depth === 1) classNames += " retailer";
+                        else if (d.depth === 2) classNames += " virtualcatalogue";
+                        else if (d.depth === 3) classNames += " network";
+                        else classNames += " location";
+                        
+                        if (d.children || d._children) classNames += " node--has-children";
+                        return classNames;
+                    })
+                    .attr("transform", d => `translate(${source.y0},${source.x0})`)
+                    .on("click", function(event, d) {
+                        if (d.children || d._children) {
+                            toggleNode(d);
+                        }
+                    });
+                
+                // Add circles to new nodes
+                nodeEnter.append("circle")
+                    .attr("r", d => 10 - d.depth * 1.5)
+                    .on("mouseover", function(event, d) {
+                        tooltip.transition()
+                            .duration(200)
+                            .style("opacity", .9);
+                        
+                        let tooltipContent = `<strong>${d.data.name}</strong>`;
+                        if (d.data.ref) tooltipContent += `<br>Ref: ${d.data.ref}`;
+                        if (d.data.type) tooltipContent += `<br>Type: ${d.data.type}`;
+                        if (d.data.status) tooltipContent += `<br>Status: ${d.data.status}`;
+                        
+                        tooltip.html(tooltipContent)
+                            .style("left", (event.pageX + 15) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", function() {
+                        tooltip.transition()
+                            .duration(500)
+                            .style("opacity", 0);
+                    });
+                
+                // Add expand/collapse indicators
+                nodeEnter.append("text")
+                    .attr("class", "collapse-indicator")
+                    .attr("x", 0)
+                    .attr("y", 0)
+                    .attr("dy", "0.3em")
+                    .text(d => (d.children || d._children) ? (d.children ? "-" : "+") : "")
+                    .style("fill-opacity", d => (d.children || d._children) ? 1 : 0);
+                
+                // Add labels to new nodes
+                nodeEnter.append("text")
+                    .attr("dy", ".31em")
+                    .attr("x", d => d.children ? -15 : 15)
+                    .style("text-anchor", d => d.children ? "end" : "start")
+                    .text(d => {
+                        // Truncate long names
+                        const name = d.data.name;
+                        return name.length > 20 ? name.substring(0, 17) + '...' : name;
+                    });
+                
+                // Update existing nodes
+                const nodeUpdate = nodeEnter.merge(node);
+                
+                nodeUpdate.transition()
+                    .duration(750)
+                    .attr("transform", d => `translate(${d.y},${d.x})`);
+                
+                nodeUpdate.select(".collapse-indicator")
+                    .text(d => (d.children || d._children) ? (d.children ? "-" : "+") : "");
+                
+                // Remove exiting nodes
+                const nodeExit = node.exit().transition()
+                    .duration(750)
+                    .attr("transform", d => `translate(${source.y},${source.x})`)
+                    .remove();
+                
+                // Update the links
+                const link = svg.selectAll(".link")
+                    .data(links, d => d.target.id);
+                
+                // Enter new links
+                link.enter().insert("path", "g")
+                    .attr("class", "link")
+                    .attr("d", d => {
+                        const o = { x: source.x0, y: source.y0 };
+                        return `M${o.y},${o.x}
+                                C${(o.y + o.y) / 2},${o.x}
+                                 ${(o.y + o.y) / 2},${o.x}
+                                 ${o.y},${o.x}`;
+                    })
+                    .transition()
+                    .duration(750)
+                    .attr("d", d => {
+                        return `M${d.target.y},${d.target.x}
+                                C${(d.target.y + d.source.y) / 2},${d.target.x}
+                                 ${(d.target.y + d.source.y) / 2},${d.source.x}
+                                 ${d.source.y},${d.source.x}`;
+                    });
+                
+                // Update existing links
+                link.transition()
+                    .duration(750)
+                    .attr("d", d => {
+                        return `M${d.target.y},${d.target.x}
+                                C${(d.target.y + d.source.y) / 2},${d.target.x}
+                                 ${(d.target.y + d.source.y) / 2},${d.source.x}
+                                 ${d.source.y},${d.source.x}`;
+                    });
+                
+                // Remove exiting links
+                link.exit().transition()
+                    .duration(750)
+                    .attr("d", d => {
+                        const o = { x: source.x, y: source.y };
+                        return `M${o.y},${o.x}
+                                C${(o.y + o.y) / 2},${o.x}
+                                 ${(o.y + o.y) / 2},${o.x}
+                                 ${o.y},${o.x}`;
+                    })
+                    .remove();
+                
+                // Store the old positions for transition
+                nodes.forEach(d => {
+                    d.x0 = d.x;
+                    d.y0 = d.y;
+                });
+            }
+            
+            // Initialize counter for node IDs
+            let nodeId = 0;
+            
+            // Initialize the visualization
+            update(root);
+            
+            // Add zoom capabilities
+            const zoom = d3.zoom()
+                .scaleExtent([0.5, 3])
+                .on("zoom", (event) => {
+                    svg.attr("transform", event.transform);
+                });
+            
+            d3.select("#visualization svg")
+                .call(zoom);
+        }
+    </script>
+</body>
+</html>

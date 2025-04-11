@@ -1,0 +1,2849 @@
+{
+    "retailerId": "[[retailer.id]]",
+    "version": "1.0",
+    "entityType": "ORDER",
+    "entitySubtype": "MULTI",
+    "description": "The Mixed Basket Reference Workflow provides end-to-end Order Lifecycle Management processing (a distributed sourcing strategy, split fulfilments, fulfilment lifecycle from any location, multiple article tracking, carrier consignments, cancellation, rejection, and escalation processes).",
+    "versionComment": "Order Module Version 1.3.0",
+    "name": "ORDER::MULTI",
+    "createdBy": "Fluent Commerce",
+    "settings": {
+      "fc.rubix.sdk.webhook.retry.method": "preserve-event-details",
+      "fc.rubix.sdk.primaryEntityCache": "flush-on-mutation"
+    },
+    "rulesets": [
+      {
+        "name": "CREATE",
+        "description": "Creates Order, changes the status to 'BOOKED' and sends an event to check fulfilment choice delivery type",
+        "type": "ORDER",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "BOOKED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.ForwardEventsWithFulfilmentChoiceReference",
+            "props": {
+              "eventName": "CheckFulfilmentChoiceType"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "CREATED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CheckFulfilmentChoiceType",
+        "description": "Sets state to RECEIVED, forwards different events depending on the fulfilment choice type",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "RECEIVED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.ForwardEventByFulfilmentChoiceType",
+            "props": {
+              "eventName": "CheckCoordinates",
+              "type": "HD"
+            }
+          },
+          {
+            "name": "[[account.id]].order.ForwardEventByFulfilmentChoiceType",
+            "props": {
+              "eventName": "ValidatePickupLocation",
+              "type": "CC"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "CREATED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CheckCoordinates",
+        "description": "Sends an event to process fulfilment choice if coordinates present. If not, sends an event to resolve from the delivery address",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.ForwardIfFulfilmentChoiceCoordinatesPresent",
+            "props": {
+              "eventName": "ProcessFulfilmentChoice"
+            }
+          },
+          {
+            "name": "[[account.id]].order.ForwardIfFulfilmentChoiceCoordinatesNotPresent",
+            "props": {
+              "eventName": "CheckDeliveryAddress"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "RECEIVED"
+          },
+          {
+            "status": "BOOKED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CheckDeliveryAddress",
+        "description": "Sends an event to resolve coordinates for delivery address, if present. If not, sends an event for processing error due to the missing delivery address",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.ForwardIfFulfilmentChoiceDeliveryAddressPresent",
+            "props": {
+              "eventName": "ResolveCoordinates"
+            }
+          },
+          {
+            "name": "[[account.id]].order.ForwardIfFulfilmentChoiceDeliveryAddressNotPresent",
+            "props": {
+              "eventName": "ProcessError"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "RECEIVED"
+          },
+          {
+            "status": "BOOKED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ResolveCoordinates",
+        "description": "Sends an event to update coordinates for delivery address, if valid. If not, sends an event for processing error due to the unresolvable delivery address",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.ResolveFulfilmentChoiceCoordinates",
+            "props": {
+              "validAddress": "UpdateCoordinates",
+              "invalidAddress": "ProcessError"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "RECEIVED"
+          },
+          {
+            "status": "BOOKED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "UpdateCoordinates",
+        "description": "Updates the delivery address coordinates and sends an event for processing the fulfilment choice",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.UpdateFulfilmentChoiceCoordinates",
+            "props": null
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "ProcessFulfilmentChoice"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "RECEIVED"
+          },
+          {
+            "status": "BOOKED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ValidatePickupLocation",
+        "description": "Validate the pickup location in fulfilment choice.",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.ForwardIfPickupLocationValid",
+            "props": {
+              "locationStatuses": ["ACTIVE"],
+              "networkRef": "[[network.ref]]",
+              "eventName": "ProcessFulfilmentChoice"
+            }
+          },
+          {
+            "name": "[[account.id]].order.ForwardIfPickupLocationNotValid",
+            "props": {
+              "locationStatuses": ["ACTIVE"],
+              "networkRef": "[[network.ref]]",
+              "eventName": "ProcessError"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "RECEIVED"
+          },
+          {
+            "status": "BOOKED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ProcessFulfilmentChoice",
+        "description": "Changes the state to BOOKED and sends an event to schedule fulfilment choice processing",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "BOOKED"
+            }
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "ScheduleFulfilmentCreation"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "RECEIVED"
+          },
+          {
+            "status": "BOOKED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ProcessError",
+        "description": "Processes FulfilmentChoice with invalid delivery address and sends an event to order ",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "ESCALATED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForOrder",
+            "props": {
+              "eventName": "EscalateOrder"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "RECEIVED"
+          },
+          {
+            "status": "BOOKED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ScheduleFulfilmentCreation",
+        "description": "Schedules sourcing based on delivery after value in the fulfilment choice ",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.ScheduleFulfilmentCreationForDeliverAfter",
+            "props": {
+              "eventName": "FindAndCreateFulfilment"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "FindAndCreateFulfilment",
+        "description": "Processes the FulfilmentChoice with a valid delivery address",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.ForwardEventWithDeliveryAddressCoordinatesByType",
+            "props": {
+              "eventName": "GetLocationsForNetwork",
+              "type": "HD"
+            }
+          },
+          {
+            "name": "[[account.id]].order.ForwardEventWithPickupLocationCoordinatesByType",
+            "props": {
+              "eventName": "GetLocationsForNetwork",
+              "type": "CC"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "GetLocationsForNetwork",
+        "description": "Gets all locations in the configured network and sends an event",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.GetLocationsForNetwork",
+            "props": {
+              "locationStatuses": [
+                "ACTIVE"
+              ],
+              "networkRef": "[[network.ref]]",
+              "eventName": "CalculateLocationsDistances"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CalculateLocationsDistances",
+        "description": "Calculates the distance between the locations in the network and delivery address or collection point coordinates",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.CalculateLocationsDistances",
+            "props": {
+              "eventName": "SearchInventoryAtLocations"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "SearchInventoryAtLocations",
+        "description": "Performs an inventory search against the virtual catalogue and sends the resulting proposed fulfilments as part of the response event",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SearchInventoryAtLocationsForFulfilmentChoice",
+            "props": {
+              "virtualCatalogueRef": "[[virtual.catalogue.ref]]",
+              "eventName": "SelectProposedFulfilment"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "SelectProposedFulfilment",
+        "description": "Selects a fulfilment location based on configured proximity and weight ratings",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SelectProposedFulfilmentForFulfilmentChoice",
+            "props": {
+              "eventName": "CheckProposedFulfilmentExists",
+              "excludedFulfilmentStatuses": [
+                "CANCELLED",
+                "EXPIRED",
+                "ESCALATED"
+              ]
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CheckProposedFulfilmentExists",
+        "description": "Checks if a proposed fulfilment exists",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.ForwardIfProposedFulfilmentNotPresent",
+            "props": {
+              "eventName": "CreateRejectedFulfilment"
+            }
+          },
+          {
+            "name": "[[account.id]].order.ForwardIfProposedFulfilmentPresent",
+            "props": {
+              "eventName": "CheckMaxSplitLimitReached"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CheckMaxSplitLimitReached",
+        "description": "Checks if the maximum number of fulfilments per order has reached",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.ForwardIfMaxSplitLimitReached",
+            "props": {
+              "eventName": "CreateRejectedFulfilment",
+              "maxSplitLimit": 5,
+              "excludedFulfilmentStatuses": [
+                "CANCELLED",
+                "EXPIRED",
+                "ESCALATED"
+              ]
+            }
+          },
+          {
+            "name": "[[account.id]].order.ForwardIfMaxSplitLimitNotReached",
+            "props": {
+              "eventName": "CreateFulfilment",
+              "maxSplitLimit": 5,
+              "excludedFulfilmentStatuses": [
+                "CANCELLED",
+                "EXPIRED",
+                "ESCALATED"
+              ]
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CreateFulfilment",
+        "description": "Creates a fulfilment at a location based on incoming proposed fulfilment. If there are unfulfilled items in the order , an event is triggered for sourcing another location to fulfil remaining items",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.CreateFulfilmentForFulfilmentChoice",
+            "props": {
+              "excludedFulfilmentStatuses": [
+                "CANCELLED",
+                "EXPIRED",
+                "ESCALATED"
+              ]
+            }
+          },
+          {
+            "name": "[[account.id]].order.ForwardIfUnfulfilledItemsExistInFulfilmentChoice",
+            "props": {
+              "eventName": "FindAndCreateFulfilment",
+              "excludedFulfilmentStatuses": [
+                "CANCELLED",
+                "EXPIRED",
+                "ESCALATED"
+              ]
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CreateRejectedFulfilment",
+        "description": "Creates a 'system rejected' fulfilment for items where no inventory could be found in the configured network",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.CreateFulfilmentForFulfilmentChoiceForUnfulfillableItems",
+            "props": {
+              "acceptedStatuses": [
+                "CREATED",
+                "PROCESSING",
+                "SCHEDULED",
+                "ASSIGNED",
+                "AWAITING_WAVE",
+                "PARTIALLY_FULFILLED",
+                "FULFILLED",
+                "READY_FOR_PACK",
+                "AWAITING_COURIER_COLLECTION",
+                "AWAITING_CUSTOMER_COLLECTION",
+                "REJECTED",
+                "COMPLETE"
+              ],
+              "rejectedStatuses": [
+                "CANCELLED",
+                "EXPIRED",
+                "ESCALATED"
+              ],
+              "systemRejectedLocationRef": "[[system.rejected.location.ref]]"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CREATE",
+        "description": "Creates a fulfilment and notifies the inventory catalogue to reserve stock. The fulfilment type is set as an attribute for further processing",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "PROCESSING"
+            }
+          },
+          {
+            "name": "[[account.id]].order.AddFulfilmentTypeAttributeToFulfilmentByFulfilmentChoice",
+            "props": null
+          },
+          {
+            "name": "[[account.id]].order.SendEventToUpdateInventoryQuantity",
+            "props": {
+              "eventName": "UpdateInventoryQty",
+              "operation": "RESERVE",
+              "inventoryCatalogueRef": "[[inventory.catalogue.ref]]",
+              "retailerId": "[[inventory.retailer.id]]"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventToFulfilmentOnVerifyingFulfilmentChoiceStatus",
+            "props": {
+              "eventName": "ProcessFulfilment",
+              "fulfilmentChoiceStatus": [
+                "BOOKED",
+                "PICK_PACK"
+              ]
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "CREATED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ProcessFulfilment",
+        "description": "Identifies the fulfilment type based on the attribute and sends the corresponding schedule event for release.Sends an escalated fulfilment event, if the fulfilment location matches the configured reject location",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.ChangeStateForUnfulfilableFulfilment",
+            "props": {
+              "status": "ESCALATED",
+              "systemRejectedLocationRef": "[[system.rejected.location.ref]]"
+            }
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "ProcessEscalatedFulfilment"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAttributeValue",
+            "props": {
+              "eventName": "ScheduleFulfilmentRelease",
+              "attributeName": "FulfilmentType",
+              "attributeValue": "HD_PFS"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAttributeValue",
+            "props": {
+              "eventName": "ScheduleFulfilmentRelease",
+              "attributeName": "FulfilmentType",
+              "attributeValue": "CC_PFS"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAttributeValue",
+            "props": {
+              "eventName": "ScheduleFulfilmentRelease",
+              "attributeName": "FulfilmentType",
+              "attributeValue": "CC_PFCP"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "PROCESSING"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ScheduleFulfilmentRelease",
+        "description": "Sets Fulfilment state to SCHEDULED,sends an scheduled event for release depending on delivery after date ",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "SCHEDULED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.ScheduleFulfilmentReleaseForDeliverAfter",
+            "props": {
+              "eventName": "StoreFulfilment"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "PROCESSING"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ProcessEscalatedFulfilment",
+        "description": "Processes fulfilments which have been escalated and could not be fulfilled",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "InformCustomerService"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "ESCALATED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "StoreFulfilment",
+        "description": "Processes Store Fulfilment ,sets state to make it ready for picking and packing. Schedules an expiry event to expire the fulfilment if picking has not started within the given pick pack time of the store",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "AWAITING_WAVE"
+            }
+          },
+          {
+            "name": "[[account.id]].order.ScheduleFulfilmentExpiryNow",
+            "props": {
+              "eventName": "FulfilmentExpiry"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "SCHEDULED"
+          },
+          {
+            "status": "PROCESSING"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "FulfilmentExpiry",
+        "description": "Initiates Fulfilment Expiry and sends an event to unreserve the inventory. Sends another event to find next best location to fulfil the remaining order items",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "EXPIRED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.RejectFulfilment",
+            "props": null
+          },
+          {
+            "name": "[[account.id]].order.SendEventToUpdateInventoryQuantity",
+            "props": {
+              "eventName": "UpdateInventoryQty",
+              "operation": "UNRESERVE",
+              "inventoryCatalogueRef": "[[inventory.catalogue.ref]]",
+              "retailerId": "[[inventory.retailer.id]]"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilmentChoice",
+            "props": {
+              "eventName": "FindAndCreateFulfilment"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "AWAITING_WAVE"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "WaveCreate",
+        "description": "Sends an event to order when the fulfilment is assigned to a created Wave. Changes the state of the fulfilment to ASSIGNED",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventForFulfilmentChoice",
+            "props": {
+              "eventName": "FulfilmentAssigned"
+            }
+          },
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "ASSIGNED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForOrder",
+            "props": {
+              "eventName": "ProcessOrder"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "AWAITING_WAVE"
+          },
+          {
+            "status": "PROCESSING"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "FulfilmentAssigned",
+        "description": "Changes status of the order to PICK_PACK indicating fulfilment is ASSIGNED to a Wave",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "PICK_PACK"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "WavePack",
+        "description": "Event is triggered from the wave entity and starts the pack process for the items in the fulfilment",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.ConfirmFulfilmentItems",
+            "props": null
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "VerifyFulfilmentItems"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "ASSIGNED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "VerifyFulfilmentItems",
+        "description": "Verifies Fulfilment Items and triggers different events based on whether all,some or none of the items were picked during the Pick phase of the Wave",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.VerifyingFulfilmentItems",
+            "props": {
+              "quantity": "ALL",
+              "eventName": "AllFulfilled"
+            }
+          },
+          {
+            "name": "[[account.id]].order.VerifyingFulfilmentItems",
+            "props": {
+              "quantity": "PARTIAL",
+              "eventName": "PartiallyFulfilled"
+            }
+          },
+          {
+            "name": "[[account.id]].order.VerifyingFulfilmentItems",
+            "props": {
+              "quantity": "NONE",
+              "eventName": "AllRejected"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "ASSIGNED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "AllFulfilled",
+        "description": "Sends an event to inventory to reset the reserved inventory values and changes the status of fulfilment to FULFILLED when all items in the Fulfilment are fulfilled from Store or Warehouse",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "FULFILLED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventToUpdateInventoryQuantity",
+            "props": {
+              "eventName": "UpdateInventoryQty",
+              "operation": "RESET_RESERVE",
+              "inventoryCatalogueRef": "[[inventory.catalogue.ref]]",
+              "retailerId": "[[inventory.retailer.id]]"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "ASSIGNED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "PartiallyFulfilled",
+        "description": "Sends an event to inventory to reset the reserved inventory values and changes the status of fulfilment to PARTIALLY_FULFILLED when only some items in the Fulfilment are fulfilled from Store or Warehouse. Sends an event to the fulfilment choice entity to source for the unfulfilled items from the next best location",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "PARTIALLY_FULFILLED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventToUpdateInventoryQuantity",
+            "props": {
+              "eventName": "UpdateInventoryQty",
+              "operation": "RESET_RESERVE",
+              "inventoryCatalogueRef": "[[inventory.catalogue.ref]]",
+              "retailerId": "[[inventory.retailer.id]]"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilmentChoice",
+            "props": {
+              "eventName": "FindAndCreateFulfilment"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "ASSIGNED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "AllRejected",
+        "description": "Sends an event to inventory to reset the reserved inventory values and changes the status of fulfilment to REJECTED when no items in the fulfilment can be fulfilled from Store or Warehouse. Sends an event to the fulfilment choice entity to source for the unfulfilled items from the next best location",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "REJECTED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventToUpdateInventoryQuantity",
+            "props": {
+              "eventName": "UpdateInventoryQty",
+              "operation": "RESET_RESERVE",
+              "inventoryCatalogueRef": "[[inventory.catalogue.ref]]",
+              "retailerId": "[[inventory.retailer.id]]"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilmentChoice",
+            "props": {
+              "eventName": "FindAndCreateFulfilment"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "ASSIGNED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "FulfilmentPack",
+        "description": "Event is triggered from the wave entity and starts the pack process for the items in the fulfilment",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.ConfirmFulfilmentItems",
+            "props": null
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "VerifyFulfilmentItemsForPack"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "ASSIGNED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "VerifyFulfilmentItemsForPack",
+        "description": "Verifies Fulfilment Items and triggers different events based on whether all,some or none of the items were picked during the Pick phase",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.VerifyingFulfilmentItems",
+            "props": {
+              "quantity": "ALL",
+              "eventName": "AllReadyForPack"
+            }
+          },
+          {
+            "name": "[[account.id]].order.VerifyingFulfilmentItems",
+            "props": {
+              "quantity": "PARTIAL",
+              "eventName": "PartiallyReadyForPack"
+            }
+          },
+          {
+            "name": "[[account.id]].order.VerifyingFulfilmentItems",
+            "props": {
+              "quantity": "NONE",
+              "eventName": "AllRejected"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "ASSIGNED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "AllReadyForPack",
+        "description": "Sends an event to inventory to reset the reserved inventory values and changes the status of fulfilment to READY_FOR_PACK when all items in the Fulfilment are fulfilled from Store or Warehouse",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "READY_FOR_PACK"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventToUpdateInventoryQuantity",
+            "props": {
+              "eventName": "UpdateInventoryQty",
+              "operation": "RESET_RESERVE",
+              "inventoryCatalogueRef": "[[inventory.catalogue.ref]]",
+              "retailerId": "[[inventory.retailer.id]]"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "ASSIGNED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "PartiallyReadyForPack",
+        "description": "Sends an event to inventory to reset the reserved inventory values and changes the status of fulfilment to READY_FOR_PACK when only some items in the Fulfilment are fulfilled from Store or Warehouse. Sends an event to the order entity to source for the unfulfilled items from the next best location",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "READY_FOR_PACK"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventToUpdateInventoryQuantity",
+            "props": {
+              "eventName": "UpdateInventoryQty",
+              "operation": "RESET_RESERVE",
+              "inventoryCatalogueRef": "[[inventory.catalogue.ref]]",
+              "retailerId": "[[inventory.retailer.id]]"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilmentChoice",
+            "props": {
+              "eventName": "FindAndCreateFulfilment"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "ASSIGNED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ConfirmParcels",
+        "description": "Event is triggered from the user action and starts the pack process for the items in the fulfilment",
+        "type": "FULFILMENT",
+        "subtype": "HD_PFS",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SetFulfilmentItemRejections",
+            "props": null
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "VerifyParcels"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": [
+          {
+            "context": [
+              {
+                "label": "Confirm Parcels",
+                "type": "PRIMARY",
+                "modules": [
+                  "servicepoint",
+                  "store"
+                ],
+                "confirm": true
+              }
+            ],
+            "attributes": [
+              {
+                "name": "packedItems",
+                "label": "Fulfilment Articles and Rejections",
+                "type": "FULFILMENT_PACK",
+                "source": "",
+                "defaultValue": "",
+                "mandatory": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ConfirmParcels",
+        "description": "Event is triggered from the user action and starts the pack process for the items in the fulfilment",
+        "type": "FULFILMENT",
+        "subtype": "CC_PFS",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SetFulfilmentItemRejections",
+            "props": null
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "VerifyParcels"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": [
+          {
+            "context": [
+              {
+                "label": "Confirm Parcels",
+                "type": "PRIMARY",
+                "modules": [
+                  "servicepoint",
+                  "store"
+                ],
+                "confirm": true
+              }
+            ],
+            "attributes": [
+              {
+                "name": "packedItems",
+                "label": "Fulfilment Articles and Rejections",
+                "type": "FULFILMENT_PACK",
+                "source": "",
+                "defaultValue": "",
+                "mandatory": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ConfirmParcels",
+        "description": "Event is triggered from the user action and starts the pack process for the items in the fulfilment",
+        "type": "FULFILMENT",
+        "subtype": "CC_PFCP",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SetFulfilmentItemRejections",
+            "props": null
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "VerifyParcels"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": [
+          {
+            "context": [
+              {
+                "label": "Confirm Parcels",
+                "type": "PRIMARY",
+                "modules": [
+                  "servicepoint",
+                  "store"
+                ],
+                "confirm": true
+              }
+            ],
+            "attributes": [
+              {
+                "name": "packedItems",
+                "label": "Fulfilment Articles and Rejections",
+                "type": "FULFILMENT_PACK",
+                "source": "",
+                "defaultValue": "",
+                "mandatory": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "VerifyParcels",
+        "description": "Verifies Fulfilment Items and Rejections and triggers different events based on whether all,some or none of the items were packed during the PACK phase",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingParcelsComplete",
+            "props": {
+              "eventName": "CreateParcels"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingParcelsPartiallyComplete",
+            "props": {
+              "eventName": "ReassignRejections"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingNoParcels",
+            "props": {
+              "eventName": "RejectFulfilment"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": [
+        ]
+      },
+      {
+        "name": "ReassignRejections",
+        "description": "Sends an event to create parcels for packed items. Sends an event to inventory to reset the reserved inventory values. Sends an event to the order entity to source for the unfulfilled items from the next best location",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventForFulfilmentChoice",
+            "props": {
+              "eventName": "FindAndCreateFulfilment"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventToUpdateInventoryQuantity",
+            "props": {
+              "eventName": "UpdateInventoryQty",
+              "operation": "RESET_RESERVE",
+              "inventoryCatalogueRef": "[[inventory.catalogue.ref]]",
+              "retailerId": "[[inventory.retailer.id]]"
+            }
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "CreateParcels"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "RejectFulfilment",
+        "description": "Changes the status of fulfilment to REJECTED when no items in the Fulfilment can be packed. Sends an event to inventory to reset the reserved inventory values. Sends an event to the order entity to source for the unfulfilled items from the next best location",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "REJECTED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventToUpdateInventoryQuantity",
+            "props": {
+              "eventName": "UpdateInventoryQty",
+              "operation": "RESET_RESERVE",
+              "inventoryCatalogueRef": "[[inventory.catalogue.ref]]",
+              "retailerId": "[[inventory.retailer.id]]"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilmentChoice",
+            "props": {
+              "eventName": "FindAndCreateFulfilment"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CreateParcels",
+        "description": "Creates articles / parcels during pack phase of the fulfilment. Sends an event to indicate Article is created",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.CreateParcelsForFulfilment",
+            "props": null
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "ArticleCreated"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "WaveDispatchInitiated",
+        "description": "Creates articles / parcels during pack phase of the fulfilment. Sends an event to indicate Article is created",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.CreateArticlesForFulfilment",
+            "props": null
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "ArticleCreated"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "FULFILLED"
+          },
+          {
+            "status": "PARTIALLY_FULFILLED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CREATE",
+        "description": "Creates an Article ,copies attributes from fulfilment and sends event depending on the fulfilment type",
+        "type": "ARTICLE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.CopyAttributesFromFulfilmentToArticle",
+            "props": null
+          },
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAttributeValue",
+            "props": {
+              "eventName": "ArticleCreating",
+              "attributeName": "FulfilmentType",
+              "attributeValue": "HD_PFS"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAttributeValue",
+            "props": {
+              "eventName": "ArticleAwaitingCourierCollection",
+              "attributeName": "FulfilmentType",
+              "attributeValue": "CC_PFS"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAttributeValue",
+            "props": {
+              "eventName": "ArticleAwaitingCustomerCollection",
+              "attributeName": "FulfilmentType",
+              "attributeValue": "CC_PFCP"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "CREATED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ArticleCreating",
+        "description": "Prepare HD Article state",
+        "type": "ARTICLE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "PENDING_CONSIGNMENT"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "CREATED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ArticleAwaitingCourierCollection",
+        "description": "Order fulfilled by other Store or DC ready to be marked as arrived",
+        "type": "ARTICLE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "PENDING_CONSIGNMENT"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilment",
+            "props": {
+              "eventName": "ModifyFulfilmentTypeToHDPFS"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "CREATED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ModifyFulfilmentTypeToHDPFS",
+        "description": "Modifies the fulfilment type to indicate it is for delivery",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.UpdateFulfilmentType",
+            "props": {
+              "fulfilmentType": "HD_PFS"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "FULFILLED"
+          },
+          {
+            "status": "PARTIALLY_FULFILLED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ModifyFulfilmentTypeToHDPFS",
+        "description": "Modifies the fulfilment type to indicate it is for delivery",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.UpdateFulfilmentType",
+            "props": {
+              "fulfilmentType": "HD_PFS"
+            }
+          },
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "FULFILLED"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ArticleCreated",
+        "description": "Schedules consignment creation",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAttributeValue",
+            "props": {
+              "eventName": "ScheduleDemoConsignment",
+              "attributeName": "FulfilmentType",
+              "attributeValue": "CC_PFS"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAttributeValue",
+            "props": {
+              "eventName": "ScheduleDemoConsignment",
+              "attributeName": "FulfilmentType",
+              "attributeValue": "HD_PFS"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "FULFILLED"
+          },
+          {
+            "status": "PARTIALLY_FULFILLED"
+          },
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ScheduleDemoConsignment",
+        "description": "Simulates the creation of a consignment in an external system, represented by the one-second delay. In a real system, this ruleset should be removed and replaced with an incoming CreateConsignment event from an external system",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.ScheduleEvent",
+            "props": {
+              "eventName": "CreateConsignment",
+              "delay": 1
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "FULFILLED"
+          },
+          {
+            "status": "PARTIALLY_FULFILLED"
+          },
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CreateConsignment",
+        "description": "Create Consignment",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.CreateDemoConsignment",
+            "props": {
+              "labelUrl": "[[label.url]]",
+              "carrierRef": "[[carrier.ref]]"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "FULFILLED"
+          },
+          {
+            "status": "PARTIALLY_FULFILLED"
+          },
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CREATE",
+        "description": "Creates a consignment, changes the status and sends an event for further processing",
+        "type": "CONSIGNMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "PROCESSING"
+            }
+          },
+          {
+            "name": "[[account.id]].core.SendEvent",
+            "props": {
+              "eventName": "ProcessConsignment"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "CREATED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ProcessConsignment",
+        "description": "Processes Consignment and sends an event depending on booking status",
+        "type": "CONSIGNMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingConsignment",
+            "props": {
+              "eventName": "ConsignmentBooked",
+              "BookingStatus": "LODGED"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "PROCESSING"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ConsignmentBooked",
+        "description": "Sets the state of consignment and sends an event to finalize consignment to all articles mapped to the consignment",
+        "type": "CONSIGNMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "ACTIVE_LODGED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForArticles",
+            "props": {
+              "eventName": "ConsignmentFinalising"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "PROCESSING"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ConsignmentFinalising",
+        "description": "Consignment is finalising. Mark the article as ready for courier collection.",
+        "type": "ARTICLE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "COURIER_COLLECTION"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAttributeValue",
+            "props": {
+              "eventName": "ConsignmentFinalised",
+              "attributeName": "FulfilmentType",
+              "attributeValue": "HD_PFS"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "PENDING_CONSIGNMENT"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ConsignmentFinalised",
+        "description": "Executed for inter-store transfers. Article will be ready for courier collection",
+        "type": "ARTICLE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventForFulfilment",
+            "props": {
+              "eventName": "ArticleAwaitingCourierCollection"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "COURIER_COLLECTION"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ArticleAwaitingCourierCollection",
+        "description": "Sends event to fulfilment upon article collection",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAllArticleStates",
+            "props": {
+              "status": [
+                "COURIER_COLLECTION"
+              ],
+              "eventName": "AllArticlesAwaitingCourierCollection"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "FULFILLED"
+          },
+          {
+            "status": "PARTIALLY_FULFILLED"
+          },
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "AllArticlesAwaitingCourierCollection",
+        "description": "Fulfilment State Change to AWAITING_COURIER_COLLECTION",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "AWAITING_COURIER_COLLECTION"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilmentChoiceOnVerifyingRejections",
+            "props": {
+              "eventName": "FulfilmentAwaitingCourierCollection"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "FULFILLED"
+          },
+          {
+            "status": "PARTIALLY_FULFILLED"
+          },
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "FulfilmentAwaitingCourierCollection",
+        "description": "Verifying All Fulfilment States",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAllFulfilmentStatesByFulfilmentChoice",
+            "props": {
+              "status": [
+                "AWAITING_COURIER_COLLECTION",
+                "REJECTED",
+                "EXPIRED",
+                "ESCALATED",
+                "COMPLETE"
+              ],
+              "eventName": "FulfilmentChoiceAwaitingCourierCollection"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "FulfilmentChoiceAwaitingCourierCollection",
+        "description": "FulfilmentChoice state change to AWAITING_COURIER_COLLECTION",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "AWAITING_COURIER_COLLECTION"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ARTICLE_COLLECTED",
+        "description": "Courier Collection",
+        "type": "ARTICLE",
+        "subtype": "DEFAULT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAttributeValue",
+            "props": {
+              "eventName": "ArticleCollected",
+              "noMatchEventName": "ArticleCollectedForArrive",
+              "attributeName": "FulfilmentType",
+              "attributeValue": "HD_PFS"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "COURIER_COLLECTION"
+          }
+        ],
+        "userActions": [
+          {
+            "eventName": "ARTICLE_COLLECTED",
+            "context": [
+              {
+                "label": "COLLECT",
+                "type": "PRIMARY",
+                "modules": [
+                  "servicepoint"
+                ],
+                "confirm": false
+              }
+            ],
+            "attributes": []
+          }
+        ]
+      },
+      {
+        "name": "ArticleCollected",
+        "description": "Post-process ARTICLE_COLLECTED user action for HD order.",
+        "type": "ARTICLE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "COLLECTED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilment",
+            "props": {
+              "eventName": "ArticleCollected"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "COURIER_COLLECTION"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ArticleCollectedForArrive",
+        "description": "Post-process ARTICLE_COLLECTED user action for CC order.",
+        "type": "ARTICLE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "AWAITING_ARRIVAL"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilment",
+            "props": {
+              "eventName": "ModifyFulfilmentTypeToCCPFS"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "COURIER_COLLECTION"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ArticleCollected",
+        "description": "Send event to fulfilment upon article customer collection",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAllArticleStatesByFulfilmentChoice",
+            "props": {
+              "status": [
+                "COLLECTED"
+              ],
+              "eventName": "AllArticlesCollected"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "AWAITING_COURIER_COLLECTION"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "AllArticlesCollected",
+        "description": "Fulfilment State Change from AWAITING_COURIER_COLLECTION to COMPLETE and send event to FulfilmentChoice",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "COMPLETE"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilmentChoice",
+            "props": {
+              "eventName": "CheckIfFulfilmentChoiceIsComplete"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "AWAITING_COURIER_COLLECTION"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CheckIfFulfilmentChoiceIsComplete",
+        "description": "Check if all fulfilments are complete within Fulfilment Choice",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAllFulfilmentStatesByFulfilmentChoice",
+            "props": {
+              "status": [
+                "COMPLETE",
+                "REJECTED",
+                "EXPIRED",
+                "ESCALATED"
+              ],
+              "eventName": "FulfilmentChoiceComplete"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "AWAITING_COURIER_COLLECTION"
+          },
+          {
+            "status": "AWAITING_CUSTOMER_COLLECTION"
+          },
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "FulfilmentChoiceComplete",
+        "description": "FulfilmentChoice state change to COMPLETE",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "COMPLETE"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForOrder",
+            "props": {
+              "eventName": "CheckIfOrderIsComplete"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "AWAITING_COURIER_COLLECTION"
+          },
+          {
+            "status": "AWAITING_CUSTOMER_COLLECTION"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ModifyFulfilmentTypeToCCPFS",
+        "description": "Modify the fulfilment type",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.UpdateFulfilmentType",
+            "props": {
+              "fulfilmentType": "CC_PFS"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "FULFILLED"
+          },
+          {
+            "status": "PARTIALLY_FULFILLED"
+          },
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ARTICLE_ARRIVED",
+        "description": "Article ready for collection after executing this ruleset",
+        "type": "ARTICLE",
+        "subtype": "DEFAULT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "AWAITING_COLLECTION"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilment",
+            "props": {
+              "eventName": "ArticleAwaitingCustomerCollection"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "AWAITING_ARRIVAL"
+          }
+        ],
+        "userActions": [
+          {
+            "eventName": "ARTICLE_ARRIVED",
+            "context": [
+              {
+                "label": "MARK AS ARRIVED",
+                "type": "PRIMARY",
+                "modules": [
+                  "servicepoint"
+                ],
+                "confirm": false
+              }
+            ],
+            "attributes": []
+          }
+        ]
+      },
+      {
+        "name": "ArticleAwaitingCustomerCollection",
+        "description": "Sends an event to Fulfilment for Customer collection if Article already at collection point",
+        "type": "ARTICLE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "AWAITING_COLLECTION"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilment",
+            "props": {
+              "eventName": "ArticleAwaitingCustomerCollection"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "CREATED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ArticleAwaitingCustomerCollection",
+        "description": "Sends an event to Fulfilment post checking all Articles mapped to the Fulfilment in the relevant statuses",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAllArticleStates",
+            "props": {
+              "status": [
+                "AWAITING_COLLECTION"
+              ],
+              "eventName": "AllArticlesAwaitingCustomerCollection"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "FULFILLED"
+          },
+          {
+            "status": "PARTIALLY_FULFILLED"
+          },
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "AllArticlesAwaitingCustomerCollection",
+        "description": "Sends an event to Order and changes fulfilment status",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "AWAITING_CUSTOMER_COLLECTION"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilmentChoiceOnVerifyingRejections",
+            "props": {
+              "eventName": "FulfilmentAwaitingCollection"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "FULFILLED"
+          },
+          {
+            "status": "PARTIALLY_FULFILLED"
+          },
+          {
+            "status": "READY_FOR_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "FulfilmentAwaitingCollection",
+        "description": "Verifies all fulfilments in the fulfilment choice are in one of the configured statuses and sends an event",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAllFulfilmentStatesByFulfilmentChoice",
+            "props": {
+              "status": [
+                "AWAITING_CUSTOMER_COLLECTION",
+                "REJECTED",
+                "EXPIRED",
+                "ESCALATED",
+                "COMPLETE"
+              ],
+              "eventName": "FulfilmentChoiceAwaitingCollection"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "FulfilmentChoiceAwaitingCollection",
+        "description": "Changes the state of the fulfilment choice to indicate the entity is awaiting customer collection",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "AWAITING_CUSTOMER_COLLECTION"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "PICK_PACK"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ARTICLE_COLLECTED",
+        "description": "Sends an event to the fulfilment when the customer collects the article",
+        "type": "ARTICLE",
+        "subtype": "DEFAULT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "COLLECTED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilment",
+            "props": {
+              "eventName": "ArticleCollected"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "AWAITING_COLLECTION"
+          }
+        ],
+        "userActions": [
+          {
+            "eventName": "ARTICLE_COLLECTED",
+            "context": [
+              {
+                "label": "COLLECT",
+                "type": "PRIMARY",
+                "modules": [
+                  "servicepoint"
+                ],
+                "confirm": false
+              }
+            ],
+            "attributes": []
+          }
+        ]
+      },
+      {
+        "name": "ArticleCollected",
+        "description": "Sends event to fulfilment when customer collects all articles",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAllArticleStates",
+            "props": {
+              "status": [
+                "COLLECTED"
+              ],
+              "eventName": "AllArticlesCollected"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "AWAITING_CUSTOMER_COLLECTION"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "AllArticlesCollected",
+        "description": "Changes fulfilment state to Complete and sends event to fulfilment choice",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "COMPLETE"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForFulfilmentChoice",
+            "props": {
+              "eventName": "CheckIfFulfilmentChoiceIsComplete"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "AWAITING_CUSTOMER_COLLECTION"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ArticleCancellation",
+        "description": "Moves article from awaiting collection or courier collection to Cancelled when collection point cancels the article",
+        "type": "ARTICLE",
+        "subtype": "DEFAULT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "CANCELLED"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "COURIER_COLLECTION"
+          },
+          {
+            "status": "AWAITING_COLLECTION"
+          }
+        ],
+        "userActions": [
+          {
+            "eventName": "ArticleCancellation",
+            "context": [
+              {
+                "label": "MARK AS CANCEL",
+                "type": "PRIMARY",
+                "modules": [
+                  "servicepoint"
+                ],
+                "confirm": true
+              }
+            ],
+            "attributes": []
+          }
+        ]
+      },
+      {
+        "name": "CheckIfOrderIsComplete",
+        "description": "Checks if all fulfilment choices are in any of the configured states and sends an event",
+        "type": "ORDER",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.SendEventOnVerifyingAllFulfilmentChoiceStates",
+            "props": {
+              "status": [
+                "COMPLETE"
+              ],
+              "eventName": "OrderComplete"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "PROCESSING"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "OrderComplete",
+        "description": "Marks order as complete",
+        "type": "ORDER",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "COMPLETE"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "PROCESSING"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "OrderCancel",
+        "description": "Cancels order ",
+        "type": "ORDER",
+        "subtype": "MULTI",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "CANCELLED"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForAllFulfilments",
+            "props": {
+              "eventName": "CancelFulfilment"
+            }
+          },
+          {
+            "name": "[[account.id]].order.SendEventForAllFulfilmentChoices",
+            "props": {
+              "eventName": "CancelFulfilmentChoice"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "CREATED"
+          },
+          {
+            "status": "RECEIVED"
+          },
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "ESCALATED"
+          }
+        ],
+        "userActions": [
+          {
+            "context": [
+              {
+                "type": "PRIMARY",
+                "label": "CANCEL ORDER",
+                "confirm": true,
+                "modules": [
+                  "adminconsole"
+                ]
+              }
+            ],
+            "attributes": []
+          }
+        ]
+      },
+      {
+        "name": "CancelFulfilment",
+        "description": "Cancel all the fulfilments when the order is cancelled in admin console",
+        "type": "FULFILMENT",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].order.CancelFulfilment"
+          },
+          {
+            "name": "[[account.id]].order.SendEventToUpdateInventoryQuantity",
+            "props": {
+              "eventName": "UpdateInventoryQty",
+              "operation": "UNRESERVE",
+              "inventoryCatalogueRef": "[[inventory.catalogue.ref]]",
+              "retailerId": "[[inventory.retailer.id]]"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "CREATED"
+          },
+          {
+            "status": "AWAITING_WAVE"
+          },
+          {
+            "status": "PROCESSING"
+          },
+          {
+            "status": "SCHEDULED"
+          },
+          {
+            "status": "ASSIGNED"
+          },
+          {
+            "status": "FULFILLED"
+          },
+          {
+            "status": "PARTIALLY_FULFILLED"
+          },
+          {
+            "status": "READY_FOR_PACK"
+          },
+          {
+            "status": "AWAITING_COURIER_COLLECTION"
+          },
+          {
+            "status": "AWAITING_CUSTOMER_COLLECTION"
+          },
+          {
+            "status": "ESCALATED"
+          },
+          {
+            "status": "EXPIRED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "ProcessOrder",
+        "description": "Updates status of order to PROCESSING",
+        "type": "ORDER",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "PROCESSING"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "BOOKED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "EscalateOrder",
+        "description": "Updates status of order to ESCALATED",
+        "type": "ORDER",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "ESCALATED"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "RECEIVED"
+          },
+          {
+            "status": "BOOKED"
+          }
+        ],
+        "userActions": []
+      },
+      {
+        "name": "CancelFulfilmentChoice",
+        "description": "Updates status of fulfilment choice to CANCELLED",
+        "type": "FULFILMENT_CHOICE",
+        "eventType": "NORMAL",
+        "rules": [
+          {
+            "name": "[[account.id]].core.SetState",
+            "props": {
+              "status": "CANCELLED"
+            }
+          }
+        ],
+        "triggers": [
+          {
+            "status": "CREATED"
+          },
+          {
+            "status": "RECEIVED"
+          },
+          {
+            "status": "BOOKED"
+          },
+          {
+            "status": "ESCALATED"
+          }
+        ],
+        "userActions": []
+      }
+    ],
+    "statuses": [
+      {
+        "name": "CREATED",
+        "entityType": "ORDER",
+        "category": "BOOKING"
+      },
+      {
+        "name": "RECEIVED",
+        "entityType": "ORDER",
+        "category": "BOOKING"
+      },
+      {
+        "name": "BOOKED",
+        "entityType": "ORDER",
+        "category": "BOOKING"
+      },
+      {
+        "name": "PROCESSING",
+        "entityType": "ORDER",
+        "category": "FULFILMENT"
+      },
+      {
+        "name": "CANCELLED",
+        "entityType": "ORDER",
+        "category": "DONE"
+      },
+      {
+        "name": "ESCALATED",
+        "entityType": "ORDER",
+        "category": "DONE"
+      },
+      {
+        "name": "COMPLETE",
+        "entityType": "ORDER",
+        "category": "DONE"
+      },
+      {
+        "name": "CREATED",
+        "entityType": "FULFILMENT_CHOICE",
+        "category": "BOOKING"
+      },
+      {
+        "name": "RECEIVED",
+        "entityType": "FULFILMENT_CHOICE",
+        "category": "BOOKING"
+      },
+      {
+        "name": "BOOKED",
+        "entityType": "FULFILMENT_CHOICE",
+        "category": "BOOKING"
+      },
+      {
+        "name": "PICK_PACK",
+        "entityType": "FULFILMENT_CHOICE",
+        "category": "FULFILMENT"
+      },
+      {
+        "name": "AWAITING_COURIER_COLLECTION",
+        "entityType": "FULFILMENT_CHOICE",
+        "category": "DELIVERY"
+      },
+      {
+        "name": "AWAITING_CUSTOMER_COLLECTION",
+        "entityType": "FULFILMENT_CHOICE",
+        "category": "DELIVERY"
+      },
+      {
+        "name": "CANCELLED",
+        "entityType": "FULFILMENT_CHOICE",
+        "category": "DONE"
+      },
+      {
+        "name": "ESCALATED",
+        "entityType": "FULFILMENT_CHOICE",
+        "category": "DONE"
+      },
+      {
+        "name": "COMPLETE",
+        "entityType": "FULFILMENT_CHOICE",
+        "category": "DONE"
+      },
+      {
+        "name": "CREATED",
+        "entityType": "FULFILMENT",
+        "category": "BOOKING"
+      },
+      {
+        "name": "SCHEDULED",
+        "entityType": "FULFILMENT",
+        "category": "BOOKING"
+      },
+      {
+        "name": "PROCESSING",
+        "entityType": "FULFILMENT",
+        "category": "BOOKING"
+      },
+      {
+        "name": "AWAITING_WAVE",
+        "entityType": "FULFILMENT",
+        "category": "BOOKING"
+      },
+      {
+        "name": "ASSIGNED",
+        "entityType": "FULFILMENT",
+        "category": "FULFILMENT"
+      },
+      {
+        "name": "FULFILLED",
+        "entityType": "FULFILMENT",
+        "category": "FULFILMENT"
+      },
+      {
+        "name": "PARTIALLY_FULFILLED",
+        "entityType": "FULFILMENT",
+        "category": "FULFILMENT"
+      },
+      {
+        "name": "REJECTED",
+        "entityType": "FULFILMENT",
+        "category": "FULFILMENT"
+      },
+      {
+        "name": "READY_FOR_PACK",
+        "entityType": "FULFILMENT",
+        "category": "FULFILMENT"
+      },
+      {
+        "name": "AWAITING_COURIER_COLLECTION",
+        "entityType": "FULFILMENT",
+        "category": "DELIVERY"
+      },
+      {
+        "name": "AWAITING_CUSTOMER_COLLECTION",
+        "entityType": "FULFILMENT",
+        "category": "DELIVERY"
+      },
+      {
+        "name": "ESCALATED",
+        "entityType": "FULFILMENT",
+        "category": "DONE"
+      },
+      {
+        "name": "EXPIRED",
+        "entityType": "FULFILMENT",
+        "category": "DONE"
+      },
+      {
+        "name": "COMPLETE",
+        "entityType": "FULFILMENT",
+        "category": "DONE"
+      },
+      {
+        "name": "CREATED",
+        "entityType": "ARTICLE",
+        "category": "DELIVERY"
+      },
+      {
+        "name": "PENDING_CONSIGNMENT",
+        "entityType": "ARTICLE",
+        "category": "DELIVERY"
+      },
+      {
+        "name": "AWAITING_COLLECTION",
+        "entityType": "ARTICLE",
+        "category": "DELIVERY"
+      },
+      {
+        "name": "AWAITING_ARRIVAL",
+        "entityType": "ARTICLE",
+        "category": "DELIVERY"
+      },
+      {
+        "name": "COURIER_COLLECTION",
+        "entityType": "ARTICLE",
+        "category": "DELIVERY"
+      },
+      {
+        "name": "CANCELLED",
+        "entityType": "ARTICLE",
+        "category": "DONE"
+      },
+      {
+        "name": "COLLECTED",
+        "entityType": "ARTICLE",
+        "category": "DONE"
+      },
+      {
+        "name": "CREATED",
+        "entityType": "CONSIGNMENT",
+        "category": "BOOKING"
+      },
+      {
+        "name": "PROCESSING",
+        "entityType": "CONSIGNMENT",
+        "category": "FULFILMENT"
+      },
+      {
+        "name": "ACTIVE_LODGED",
+        "entityType": "CONSIGNMENT",
+        "category": "DELIVERY"
+      }
+    ]
+  }
+  

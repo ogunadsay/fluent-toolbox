@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workflow Visualizer</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="sidebar">
+      <h2>Workflow Template</h2>
+      <textarea id="json-input" placeholder="Paste JSON template here..."></textarea>
+      <div class="button-group">
+        <button id="visualize-btn">Visualize</button>
+        <button id="reset-btn">Reset</button>
+      </div>
+      <div class="legend">
+        <h3>Entity Types</h3>
+        <div class="legend-item"><span class="color-box order"></span>ORDER</div>
+        <div class="legend-item"><span class="color-box fulfilment"></span>FULFILMENT</div>
+        <div class="legend-item"><span class="color-box article"></span>ARTICLE</div>
+        <div class="legend-item"><span class="color-box consignment"></span>CONSIGNMENT</div>
+        <div class="legend-item"><span class="color-box fulfilment-choice"></span>FULFILMENT_CHOICE</div>
+      </div>
+      <div class="help-section">
+        <h3>Tips</h3>
+        <p><strong>Left-click</strong> on a node to expand/collapse connections</p>
+        <p><strong>Right-click</strong> on a node to see detailed information</p>
+      </div>
+    </div>
+    <div class="main-content">
+      <h1>Workflow Visualizer</h1>
+      <div class="controls">
+        <button id="zoom-in">+</button>
+        <button id="zoom-out">-</button>
+        <button id="fit-screen">Fit to Screen</button>
+      </div>
+      <div class="visualization-container">
+        <svg id="workflow-svg"></svg>
+      </div>
+    </div>
+    <div id="detail-sidebar" class="detail-sidebar">
+      <!-- Node details will be dynamically inserted here -->
+    </div>
+  </div>
+
+  <script src="js/parser.js"></script>
+  <script src="js/visualizer.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
