@@ -58,13 +58,95 @@
             dominant-baseline: middle;
             text-anchor: middle;
         }
+        
+        /* Added styles for input section */
+        .input-section {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        #json-input {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        button {
+            padding: 8px 16px;
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: #0b5ed7;
+        }
+        
+        #reset-btn {
+            background-color: #dc3545;
+        }
+        
+        #reset-btn:hover {
+            background-color: #bb2d3b;
+        }
     </style>
 </head>
 <body>
     <h1>Virtual Catalogue Network Location Visualizer</h1>
+
+    <!-- Added input section -->
+    <div class="input-section">
+        <textarea id="json-input" placeholder="Paste your JSON data here..."></textarea>
+        <div class="button-group">
+            <button id="visualize-btn">Visualize</button>
+            <button id="reset-btn">Reset</button>
+        </div>
+    </div>
+
     <div id="visualization"></div>
 
     <script>
+        // Initialize visualization on button click instead of on load
+        document.getElementById('visualize-btn').addEventListener('click', function() {
+            const jsonInput = document.getElementById('json-input').value.trim();
+            if (!jsonInput) {
+                alert('Please paste JSON data in the textarea.');
+                return;
+            }
+            
+            try {
+                const data = JSON.parse(jsonInput);
+                // Clear existing visualization
+                document.getElementById('visualization').innerHTML = '';
+                // Create visualization with parsed data
+                createVisualization(data);
+            } catch (error) {
+                console.error('Error parsing JSON:', error);
+                alert('Invalid JSON format. Please check your input.');
+            }
+        });
+        
+        // Reset button functionality
+        document.getElementById('reset-btn').addEventListener('click', function() {
+            document.getElementById('json-input').value = '';
+            document.getElementById('visualization').innerHTML = '';
+        });
+
         // Fetch the data
         fetch('data.json')
             .then(response => response.json())
