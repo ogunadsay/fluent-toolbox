@@ -264,30 +264,226 @@ class WorkflowVisualizer {
   renderChildren(parentNode, parentX, parentY, parentHeight) {
     if (!parentNode.children || parentNode.children.length === 0) return;
     
+    // Get ruleset data for the parent node
+    const workflow = JSON.parse(document.getElementById('json-input').value);
+    const ruleset = workflow.rulesets.find(r => r.name === parentNode.name && r.type === parentNode.type && 
+                                       (r.subtype || 'DEFAULT') === (parentNode.subtype || 'DEFAULT'));
+    
+    // Identify conditional rules in the parent ruleset
+    const conditionalRuleMap = new Map();
+    if (ruleset && ruleset.rules) {
+      const conditionalRuleTypes = [
+        'IfElseAllConditionsRule', 
+        'SendInlineEventOnVerifyingAttributeValue', 
+        'SendEventOnVerifyingAttributeValue', 
+        'VerifyFeatureIsEnabled',
+        'IfOrderAttributeEquals'
+      ];
+      
+      ruleset.rules.forEach(rule => {
+        const ruleName = rule.name.split('.').pop();
+        if (conditionalRuleTypes.includes(ruleName)) {
+          conditionalRuleMap.set(ruleName, rule);
+        }
+      });
+    }
+    
+    // Group child nodes by rule type
+    const edgesByRule = new Map();
+    if (parentNode.children) {
+      parentNode.children.forEach(child => {
+        const edge = this.graphData.edges.find(e => e.source === parentNode.id && e.target === child.id);
+        if (edge) {
+          // Determine which rule this edge belongs to
+          let ruleKey = null;
+          
+          // Check if this edge is part of a conditional rule
+          if (edge.eventType === 'eventName' || edge.eventType === 'defaultEventName' ||
+              edge.eventType === 'noMatchEventName' || edge.eventType === 'featureEnabledEvent' ||
+              edge.eventType === 'featureDisabledEvent') {
+            
+            // Find matching rule based on event type
+            for (const [ruleName, rule] of conditionalRuleMap.entries()) {
+              if ((ruleName === 'IfElseAllConditionsRule' && 
+                   (edge.eventType === 'eventName' || edge.eventType === 'defaultEventName')) ||
+                  ((ruleName === 'SendInlineEventOnVerifyingAttributeValue' || 
+                    ruleName === 'SendEventOnVerifyingAttributeValue' || 
+                    ruleName === 'IfOrderAttributeEquals') && 
+                   (edge.eventType === 'eventName' || edge.eventType === 'noMatchEventName')) ||
+                  (ruleName === 'VerifyFeatureIsEnabled' && 
+                   (edge.eventType === 'featureEnabledEvent' || edge.eventType === 'featureDisabledEvent'))) {
+                ruleKey = ruleName;
+                break;
+              }
+            }
+          }
+          
+          // Group by rule or mark as standard edge
+          if (ruleKey) {
+            if (!edgesByRule.has(ruleKey)) {
+              edgesByRule.set(ruleKey, []);
+            }
+            edgesByRule.get(ruleKey).push({ child, edge });
+          } else {
+            // Non-conditional edges
+            if (!edgesByRule.has('standard')) {
+              edgesByRule.set('standard', []);
+            }
+            edgesByRule.get('standard').push({ child, edge });
+          }
+        }
+      });
+    }
+    
+    // Calculate layout
     const numChildren = parentNode.children.length;
     const totalHeight = (numChildren - 1) * this.verticalSpacing;
     const startY = parentY - totalHeight / 2;
     
-    parentNode.children.forEach((child, i) => {
-      const childX = parentX + this.horizontalSpacing;
-      const childY = startY + i * this.verticalSpacing;
+    // Process standard (non-conditional) edges first
+    let childIndex = 0;
+    if (edgesByRule.has('standard')) {
+      edgesByRule.get('standard').forEach(({ child, edge }) => {
+        const childX = parentX + this.horizontalSpacing;
+        const childY = startY + childIndex * this.verticalSpacing;
+        childIndex++;
+        
+        // Draw direct edge
+        this.drawStandardEdge(parentNode, child, edge, parentX, parentY, childX, childY, parentHeight);
+        
+        // Render child node
+        this.renderNode(child, childX, childY);
+      });
+    }
+    
+    // Process conditional edges with decision points
+    for (const [ruleName, edgeGroups] of edgesByRule.entries()) {
+      if (ruleName === 'standard') continue; // Skip standard edges
       
-      // Draw edge from parent to child
-      this.drawEdge(parentNode, child, parentX, parentY, childX, childY, parentHeight);
+      // Create a decision diamond for this rule
+      const diamondX = parentX + this.nodeWidth + 100; // Position diamond halfway to child
+      const diamondY = startY + childIndex * this.verticalSpacing;
       
-      // Render child node
-      this.renderNode(child, childX, childY);
-    });
+      // Draw the diamond
+      this.drawDecisionDiamond(ruleName, parentNode, diamondX, diamondY, parentX, parentY, parentHeight);
+      
+      // Draw edges from diamond to children
+      edgeGroups.forEach(({ child, edge }) => {
+        const childX = parentX + this.horizontalSpacing;
+        const childY = startY + childIndex * this.verticalSpacing;
+        childIndex++;
+        
+        // Draw conditional edge from diamond to child
+        this.drawConditionalEdge(edge, diamondX, diamondY, childX, childY);
+        
+        // Render child node
+        this.renderNode(child, childX, childY);
+      });
+    }
   }
   
-  drawEdge(source, target, sourceX, sourceY, targetX, targetY, sourceHeight) {
-    // Find the edge data for this source-target pair
-    const edge = this.graphData.edges.find(e => 
-      e.source === source.id && e.target === target.id
-    );
+  drawDecisionDiamond(ruleName, parentNode, diamondX, diamondY, parentX, parentY, parentHeight) {
+    const diamondSize = 30;
+    const sourceRight = parentX + this.nodeWidth;
+    const sourceMidY = parentY + (parentHeight || this.nodeHeight) / 2;
     
-    if (!edge) return;
+    // Draw diamond
+    this.g.append('polygon')
+      .attr('points', `${diamondX},${diamondY-diamondSize/2} ${diamondX+diamondSize/2},${diamondY} ${diamondX},${diamondY+diamondSize/2} ${diamondX-diamondSize/2},${diamondY}`)
+      .attr('fill', '#FFEB3B')  // Yellow
+      .attr('stroke', '#333')
+      .attr('stroke-width', 1);
     
+    // Draw rule name in the diamond
+    this.g.append('text')
+      .attr('x', diamondX)
+      .attr('y', diamondY)
+      .attr('text-anchor', 'middle')
+      .attr('alignment-baseline', 'middle')
+      .attr('font-size', '8px')
+      .attr('fill', '#000')
+      .text(ruleName.substring(0, 10));
+    
+    // Draw path from parent to diamond
+    const sourceToDiamond = d3.line().curve(d3.curveBasis)([
+      [sourceRight, sourceMidY],
+      [(sourceRight + diamondX - diamondSize/2) / 2, sourceMidY],
+      [diamondX - diamondSize/2, diamondY]
+    ]);
+    
+    this.g.append('path')
+      .attr('d', sourceToDiamond)
+      .attr('class', 'link')
+      .attr('stroke', '#666')
+      .attr('fill', 'none');
+  }
+  
+  drawConditionalEdge(edge, diamondX, diamondY, targetX, targetY) {
+    const diamondSize = 30;
+    const targetLeft = targetX;
+    const targetMidY = targetY + this.nodeHeight / 2;
+    
+    // Determine condition color and text
+    let conditionColor, conditionText;
+    switch(edge.eventType) {
+      case 'eventName':
+      case 'featureEnabledEvent':
+        conditionColor = '#4CAF50'; // Green for true path
+        conditionText = 'TRUE';
+        break;
+      case 'noMatchEventName':
+      case 'defaultEventName':
+      case 'featureDisabledEvent':
+        conditionColor = '#F44336'; // Red for false path
+        conditionText = 'FALSE';
+        break;
+      default:
+        conditionColor = '#2196F3'; // Blue for other paths
+        conditionText = '';
+    }
+    
+    // Draw path from diamond to target
+    const diamondToTarget = d3.line().curve(d3.curveBasis)([
+      [diamondX + diamondSize/2, diamondY],
+      [(diamondX + diamondSize/2 + targetLeft) / 2, diamondY],
+      [(diamondX + diamondSize/2 + targetLeft) / 2, targetMidY],
+      [targetLeft, targetMidY]
+    ]);
+    
+    this.g.append('path')
+      .attr('d', diamondToTarget)
+      .attr('class', 'link')
+      .attr('marker-end', 'url(#arrowhead)')
+      .attr('stroke', conditionColor)
+      .attr('fill', 'none');
+    
+    // Add condition text (true/false)
+    if (conditionText) {
+      this.g.append('text')
+        .attr('class', 'condition-label')
+        .attr('x', (diamondX + diamondSize/2 + targetLeft) / 2)
+        .attr('y', ((diamondY + targetMidY) / 2) - 5)
+        .attr('text-anchor', 'middle')
+        .attr('fill', conditionColor)
+        .attr('font-size', '10px')
+        .attr('font-weight', 'bold')
+        .text(conditionText);
+    }
+    
+    // Add event label below the condition text
+    if (edge.label) {
+      this.g.append('text')
+        .attr('class', 'event-label')
+        .attr('x', (diamondX + diamondSize/2 + targetLeft) / 2)
+        .attr('y', ((diamondY + targetMidY) / 2) + 10)
+        .attr('text-anchor', 'middle')
+        .attr('fill', conditionColor)
+        .attr('font-size', '9px')
+        .text(edge.label);
+    }
+  }
+  
+  drawStandardEdge(source, target, edge, sourceX, sourceY, targetX, targetY, sourceHeight) {
     // Calculate path coordinates
     const sourceRight = sourceX + this.nodeWidth;
     const sourceMidY = sourceY + (sourceHeight || this.nodeHeight) / 2;
@@ -295,7 +491,7 @@ class WorkflowVisualizer {
     const targetMidY = targetY + this.nodeHeight / 2;
     const midX = (sourceRight + targetLeft) / 2;
     
-    // Create a curved path
+    // Create a regular curved path for standard edges
     const path = d3.line().curve(d3.curveBasis)([
       [sourceRight, sourceMidY],
       [midX, sourceMidY],
@@ -335,6 +531,20 @@ class WorkflowVisualizer {
         .attr('fill', labelColor)
         .text(edge.label);
     }
+  }
+  
+  // Replace the existing drawEdge method with this delegation function
+  drawEdge(source, target, sourceX, sourceY, targetX, targetY, sourceHeight) {
+    // Find the edge data for this source-target pair
+    const edge = this.graphData.edges.find(e => 
+      e.source === source.id && e.target === target.id
+    );
+    
+    if (!edge) return;
+    
+    // The main drawEdge logic is now handled in renderChildren
+    // This method is kept for backward compatibility
+    this.drawStandardEdge(source, target, edge, sourceX, sourceY, targetX, targetY, sourceHeight);
   }
   
   toggleNode(node, x, y) {
