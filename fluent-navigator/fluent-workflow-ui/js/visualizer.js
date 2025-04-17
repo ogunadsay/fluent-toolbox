@@ -159,38 +159,8 @@ class WorkflowVisualizer {
       .attr('dy', (d, i) => i === 0 ? 0 : 12)
       .text(d => d);
     
-    // Triggers section
-    let yOffset = 45 + description.length * 12 + 10;
-    g.append('text')
-      .attr('x', 10)
-      .attr('y', yOffset)
-      .attr('font-size', '12px')
-      .attr('font-weight', 'bold')
-      .text('Triggers:');
-    
-    yOffset += 15;
-    // Get triggers from original data
-    if (ruleset && ruleset.triggers && ruleset.triggers.length > 0) {
-      ruleset.triggers.forEach((trigger, i) => {
-        g.append('text')
-          .attr('x', 20)
-          .attr('y', yOffset + i * 12)
-          .attr('font-size', '10px')
-          .text(`Status: ${trigger.status}`);
-      });
-      
-      yOffset += ruleset.triggers.length * 12 + 5;
-    } else {
-      g.append('text')
-        .attr('x', 20)
-        .attr('y', yOffset)
-        .attr('font-size', '10px')
-        .text('No triggers');
-        
-      yOffset += 12 + 5;
-    }
-    
     // Rules section
+    let yOffset = 45 + description.length * 12 + 10;
     g.append('text')
       .attr('x', 10)
       .attr('y', yOffset)
@@ -225,6 +195,35 @@ class WorkflowVisualizer {
         .attr('y', yOffset)
         .attr('font-size', '10px')
         .text('No rules');
+    }
+    // Triggers section
+    g.append('text')
+      .attr('x', 10)
+      .attr('y', yOffset + 15 * ruleset.rules.length)
+      .attr('font-size', '12px')
+      .attr('font-weight', 'bold')
+      .text('Triggers:');
+    
+    yOffset += 15;
+    // Get triggers from original data
+    if (ruleset && ruleset.triggers && ruleset.triggers.length > 0) {
+      ruleset.triggers.forEach((trigger, i) => {
+        g.append('text')
+          .attr('x', 20)
+          .attr('y', yOffset + 15 * ruleset.rules.length + i * 12)
+          .attr('font-size', '10px')
+          .text(`Status: ${trigger.status}`);
+      });
+      
+      yOffset += ruleset.triggers.length * 12 + 5;
+    } else {
+      g.append('text')
+        .attr('x', 20)
+        .attr('y', yOffset)
+        .attr('font-size', '10px')
+        .text('No triggers');
+        
+      yOffset += 12 + 5;
     }
     
     // Add expand/collapse indicator if node has children
@@ -399,12 +398,6 @@ class WorkflowVisualizer {
         const displayName = ruleGroup.displayName;
         let displayLabel = displayName.split('.').pop();
         
-        // Add event name info if available
-        if (ruleGroup.rule && ruleGroup.rule.props && ruleGroup.rule.props.eventName) {
-          const shortEventName = ruleGroup.rule.props.eventName.substring(0, 15);
-          displayLabel += `\n(${shortEventName}${shortEventName.length < ruleGroup.rule.props.eventName.length ? '...' : ''})`;
-        }
-        
         // Store diamond data
         diamondData.push({
           ruleKey,
@@ -472,16 +465,6 @@ class WorkflowVisualizer {
       .attr('stroke', '#333')
       .attr('stroke-width', 1);
     
-    // Add rule name label in the diamond
-    this.g.append('text')
-      .attr('x', diamondX)
-      .attr('y', diamondY - 10)
-      .attr('text-anchor', 'middle')
-      .attr('alignment-baseline', 'middle')
-      .attr('font-size', '10px')
-      .attr('font-weight', 'bold')
-      .attr('fill', '#000')
-      .text('Decision Rule:');
       
     // Support multi-line rule names
     const ruleNameLines = ruleName.split('\n');
@@ -706,24 +689,6 @@ class WorkflowVisualizer {
     `;
     sidebar.appendChild(descSection);
     
-    // Add triggers
-    const triggersSection = document.createElement('div');
-    triggersSection.className = 'sidebar-section';
-    let triggersHtml = `<h4>Triggers</h4>`;
-    
-    if (ruleset && ruleset.triggers && ruleset.triggers.length > 0) {
-      triggersHtml += `<ul>`;
-      ruleset.triggers.forEach(trigger => {
-        triggersHtml += `<li>Status: ${trigger.status}</li>`;
-      });
-      triggersHtml += `</ul>`;
-    } else {
-      triggersHtml += `<p>No triggers defined</p>`;
-    }
-    
-    triggersSection.innerHTML = triggersHtml;
-    sidebar.appendChild(triggersSection);
-    
     // Add rules
     const rulesSection = document.createElement('div');
     rulesSection.className = 'sidebar-section';
@@ -750,6 +715,25 @@ class WorkflowVisualizer {
     
     rulesSection.innerHTML = rulesHtml;
     sidebar.appendChild(rulesSection);
+
+    // Add triggers
+    const triggersSection = document.createElement('div');
+    triggersSection.className = 'sidebar-section';
+    let triggersHtml = `<h4>Triggers</h4>`;
+    
+    if (ruleset && ruleset.triggers && ruleset.triggers.length > 0) {
+      triggersHtml += `<ul>`;
+      ruleset.triggers.forEach(trigger => {
+        triggersHtml += `<li>Status: ${trigger.status}</li>`;
+      });
+      triggersHtml += `</ul>`;
+    } else {
+      triggersHtml += `<p>No triggers defined</p>`;
+    }
+    
+    triggersSection.innerHTML = triggersHtml;
+    sidebar.appendChild(triggersSection);
+    
     
     // Add user actions if available
     if (ruleset && ruleset.userActions && ruleset.userActions.length > 0) {
