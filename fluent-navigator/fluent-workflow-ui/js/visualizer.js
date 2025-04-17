@@ -16,7 +16,7 @@ class WorkflowVisualizer {
     
     // Updated node dimensions to accommodate more content
     this.nodeWidth = 300;
-    this.nodeHeight = 180; // Reduced from 220
+    this.nodeHeight = 180;
     this.horizontalSpacing = 600; // Increased from 400 for better diamond visibility
     this.verticalSpacing = 230;
     
@@ -392,8 +392,9 @@ class WorkflowVisualizer {
       
       // Calculate diamond position - center it among its child nodes
       if (ruleChildPositions.length > 0) {
+        console.log(ruleChildPositions)
         // Find average Y position of connected child nodes
-        const avgY = ruleChildPositions.reduce((sum, pos) => sum + pos.y, 0) / ruleChildPositions.length;
+        const avgY = ruleChildPositions.reduce((sum, pos) => sum + pos.y + this.nodeHeight / 2, 0) / ruleChildPositions.length;
         
         const displayName = ruleGroup.displayName;
         let displayLabel = displayName.split('.').pop();
