@@ -17,7 +17,7 @@ class WorkflowVisualizer {
     // Updated node dimensions to accommodate more content
     this.nodeWidth = 300;
     this.nodeHeight = 180; // Reduced from 220
-    this.horizontalSpacing = 400;
+    this.horizontalSpacing = 600; // Increased from 400 for better diamond visibility
     this.verticalSpacing = 230;
     
     // Track expanded nodes
@@ -283,109 +283,187 @@ class WorkflowVisualizer {
       ruleset.rules.forEach(rule => {
         const ruleName = rule.name.split('.').pop();
         if (conditionalRuleTypes.includes(ruleName)) {
-          conditionalRuleMap.set(ruleName, rule);
+          // Store the full rule details to differentiate between instances
+          conditionalRuleMap.set(rule.name, { rule, ruleName });
         }
       });
     }
     
-    // Group child nodes by rule type
+    // Group child nodes by rule instance (not by condition/edge)
     const edgesByRule = new Map();
+    const edgesByStandard = [];
+
+    // First pass: Identify which rule each edge belongs to
     if (parentNode.children) {
       parentNode.children.forEach(child => {
         const edge = this.graphData.edges.find(e => e.source === parentNode.id && e.target === child.id);
-        if (edge) {
-          // Determine which rule this edge belongs to
-          let ruleKey = null;
+        if (!edge) return;
+
+        // Check if this edge belongs to a conditional rule
+        let matched = false;
+        for (const [ruleName, ruleData] of conditionalRuleMap.entries()) {
+          const { rule, ruleName: ruleType } = ruleData;
           
-          // Check if this edge is part of a conditional rule
-          if (edge.eventType === 'eventName' || edge.eventType === 'defaultEventName' ||
-              edge.eventType === 'noMatchEventName' || edge.eventType === 'featureEnabledEvent' ||
-              edge.eventType === 'featureDisabledEvent') {
-            
-            // Find matching rule based on event type
-            for (const [ruleName, rule] of conditionalRuleMap.entries()) {
-              if ((ruleName === 'IfElseAllConditionsRule' && 
-                   (edge.eventType === 'eventName' || edge.eventType === 'defaultEventName')) ||
-                  ((ruleName === 'SendInlineEventOnVerifyingAttributeValue' || 
-                    ruleName === 'SendEventOnVerifyingAttributeValue' || 
-                    ruleName === 'IfOrderAttributeEquals') && 
-                   (edge.eventType === 'eventName' || edge.eventType === 'noMatchEventName')) ||
-                  (ruleName === 'VerifyFeatureIsEnabled' && 
-                   (edge.eventType === 'featureEnabledEvent' || edge.eventType === 'featureDisabledEvent'))) {
-                ruleKey = ruleName;
-                break;
+          if (rule.props) {
+            // Check if any event in this rule's props matches the edge
+            if ((rule.props.eventName && edge.label === rule.props.eventName) || 
+                (rule.props.noMatchEventName && edge.label === rule.props.noMatchEventName) ||
+                (rule.props.defaultEventName && edge.label === rule.props.defaultEventName) ||
+                (rule.props.featureEnabledEvent && edge.label === rule.props.featureEnabledEvent) ||
+                (rule.props.featureDisabledEvent && edge.label === rule.props.featureDisabledEvent)) {
+              
+              // Create a unique rule instance key - use the rule name WITHOUT the edge label
+              const ruleInstanceKey = ruleName;
+              
+              // Initialize rule group if not exists
+              if (!edgesByRule.has(ruleInstanceKey)) {
+                edgesByRule.set(ruleInstanceKey, {
+                  edges: [],
+                  rule,
+                  ruleName: rule.name,
+                  displayName: ruleType
+                });
               }
+              
+              // Add edge to this rule group
+              edgesByRule.get(ruleInstanceKey).edges.push({ child, edge });
+              matched = true;
+              break;
             }
           }
-          
-          // Group by rule or mark as standard edge
-          if (ruleKey) {
-            if (!edgesByRule.has(ruleKey)) {
-              edgesByRule.set(ruleKey, []);
-            }
-            edgesByRule.get(ruleKey).push({ child, edge });
-          } else {
-            // Non-conditional edges
-            if (!edgesByRule.has('standard')) {
-              edgesByRule.set('standard', []);
-            }
-            edgesByRule.get('standard').push({ child, edge });
-          }
+        }
+        
+        // If not matched to a conditional rule, add to standard edges
+        if (!matched) {
+          edgesByStandard.push({ child, edge });
         }
       });
     }
     
-    // Calculate layout
+    // Define layout position variables
     const numChildren = parentNode.children.length;
     const totalHeight = (numChildren - 1) * this.verticalSpacing;
     const startY = parentY - totalHeight / 2;
     
-    // Process standard (non-conditional) edges first
-    let childIndex = 0;
-    if (edgesByRule.has('standard')) {
-      edgesByRule.get('standard').forEach(({ child, edge }) => {
-        const childX = parentX + this.horizontalSpacing;
-        const childY = startY + childIndex * this.verticalSpacing;
-        childIndex++;
-        
-        // Draw direct edge
-        this.drawStandardEdge(parentNode, child, edge, parentX, parentY, childX, childY, parentHeight);
-        
-        // Render child node
-        this.renderNode(child, childX, childY);
+    // Common horizontal position calculations
+    const parentRight = parentX + this.nodeWidth;
+    const childLeft = parentX + this.horizontalSpacing;
+    const diamondHorizOffset = 150; // Distance from parent right edge to diamond center
+    const diamondX = parentRight + diamondHorizOffset;
+    
+    // Common source calculations
+    const sourceMidY = parentY + (parentHeight || this.nodeHeight) / 2;
+    
+    // Calculate positions for all nodes and diamonds
+    const nodePositions = [];
+    let currentY = startY;
+    
+    // First position standard nodes
+    const standardNodes = edgesByStandard.map(({ child, edge }) => {
+      const position = {
+        child,
+        edge,
+        x: childLeft,
+        y: currentY,
+        type: 'standard'
+      };
+      currentY += this.verticalSpacing;
+      nodePositions.push(position);
+      return position;
+    });
+    
+    // Now calculate positions for conditional nodes and their diamonds
+    const diamondData = [];
+    
+    for (const [ruleKey, ruleGroup] of edgesByRule.entries()) {
+      // For each rule, precalculate positions of its child nodes
+      const ruleChildPositions = ruleGroup.edges.map(({ child, edge }) => {
+        const position = {
+          child,
+          edge,
+          x: childLeft,
+          y: currentY,
+          ruleKey,
+          type: 'conditional'
+        };
+        currentY += this.verticalSpacing;
+        nodePositions.push(position);
+        return position;
       });
+      
+      // Calculate diamond position - center it among its child nodes
+      if (ruleChildPositions.length > 0) {
+        // Find average Y position of connected child nodes
+        const avgY = ruleChildPositions.reduce((sum, pos) => sum + pos.y, 0) / ruleChildPositions.length;
+        
+        const displayName = ruleGroup.displayName;
+        let displayLabel = displayName.split('.').pop();
+        
+        // Add event name info if available
+        if (ruleGroup.rule && ruleGroup.rule.props && ruleGroup.rule.props.eventName) {
+          const shortEventName = ruleGroup.rule.props.eventName.substring(0, 15);
+          displayLabel += `\n(${shortEventName}${shortEventName.length < ruleGroup.rule.props.eventName.length ? '...' : ''})`;
+        }
+        
+        // Store diamond data
+        diamondData.push({
+          ruleKey,
+          ruleName: displayLabel,
+          x: diamondX,
+          y: avgY,
+          childPositions: ruleChildPositions,
+          rule: ruleGroup.rule
+        });
+      }
     }
     
-    // Process conditional edges with decision points
-    for (const [ruleName, edgeGroups] of edgesByRule.entries()) {
-      if (ruleName === 'standard') continue; // Skip standard edges
+    // First draw all diamonds
+    diamondData.forEach(diamond => {
+      this.drawDecisionDiamond(
+        diamond.ruleName, 
+        parentRight, 
+        sourceMidY, 
+        diamond.x, 
+        diamond.y
+      );
+    });
+    
+    // Then draw standard nodes and edges
+    standardNodes.forEach(nodePos => {
+      // Draw direct edge
+      this.drawStandardEdge(
+        parentRight, 
+        sourceMidY, 
+        nodePos.x, 
+        nodePos.y + this.nodeHeight / 2, 
+        nodePos.edge
+      );
       
-      // Create a decision diamond for this rule
-      const diamondX = parentX + this.nodeWidth + 100; // Position diamond halfway to child
-      const diamondY = startY + childIndex * this.verticalSpacing;
-      
-      // Draw the diamond
-      this.drawDecisionDiamond(ruleName, parentNode, diamondX, diamondY, parentX, parentY, parentHeight);
-      
-      // Draw edges from diamond to children
-      edgeGroups.forEach(({ child, edge }) => {
-        const childX = parentX + this.horizontalSpacing;
-        const childY = startY + childIndex * this.verticalSpacing;
-        childIndex++;
-        
-        // Draw conditional edge from diamond to child
-        this.drawConditionalEdge(edge, diamondX, diamondY, childX, childY);
+      // Render child node
+      this.renderNode(nodePos.child, nodePos.x, nodePos.y);
+    });
+    
+    // Finally draw conditional nodes and edges
+    diamondData.forEach(diamond => {
+      // For each child of this diamond
+      diamond.childPositions.forEach(nodePos => {
+        // Draw edge from diamond to child
+        this.drawConditionalEdge(
+          nodePos.edge,
+          diamond.x,
+          diamond.y,
+          nodePos.x,
+          nodePos.y + this.nodeHeight / 2
+        );
         
         // Render child node
-        this.renderNode(child, childX, childY);
+        this.renderNode(nodePos.child, nodePos.x, nodePos.y);
       });
-    }
+    });
   }
   
-  drawDecisionDiamond(ruleName, parentNode, diamondX, diamondY, parentX, parentY, parentHeight) {
-    const diamondSize = 30;
-    const sourceRight = parentX + this.nodeWidth;
-    const sourceMidY = parentY + (parentHeight || this.nodeHeight) / 2;
+  drawDecisionDiamond(ruleName, parentRight, sourceMidY, diamondX, diamondY) {
+    const diamondSize = 60; // Increased from 30 for better visibility
     
     // Draw diamond
     this.g.append('polygon')
@@ -394,20 +472,34 @@ class WorkflowVisualizer {
       .attr('stroke', '#333')
       .attr('stroke-width', 1);
     
-    // Draw rule name in the diamond
+    // Add rule name label in the diamond
     this.g.append('text')
       .attr('x', diamondX)
-      .attr('y', diamondY)
+      .attr('y', diamondY - 10)
       .attr('text-anchor', 'middle')
       .attr('alignment-baseline', 'middle')
-      .attr('font-size', '8px')
+      .attr('font-size', '10px')
+      .attr('font-weight', 'bold')
       .attr('fill', '#000')
-      .text(ruleName.substring(0, 10));
+      .text('Decision Rule:');
+      
+    // Support multi-line rule names
+    const ruleNameLines = ruleName.split('\n');
+    ruleNameLines.forEach((line, i) => {
+      this.g.append('text')
+        .attr('x', diamondX)
+        .attr('y', diamondY + 5 + (i * 12))
+        .attr('text-anchor', 'middle')
+        .attr('alignment-baseline', 'middle')
+        .attr('font-size', '9px')
+        .attr('fill', '#000')
+        .text(line);
+    });
     
     // Draw path from parent to diamond
     const sourceToDiamond = d3.line().curve(d3.curveBasis)([
-      [sourceRight, sourceMidY],
-      [(sourceRight + diamondX - diamondSize/2) / 2, sourceMidY],
+      [parentRight, sourceMidY],
+      [(parentRight + diamondX - diamondSize/2) / 2, sourceMidY],
       [diamondX - diamondSize/2, diamondY]
     ]);
     
@@ -419,9 +511,7 @@ class WorkflowVisualizer {
   }
   
   drawConditionalEdge(edge, diamondX, diamondY, targetX, targetY) {
-    const diamondSize = 30;
-    const targetLeft = targetX;
-    const targetMidY = targetY + this.nodeHeight / 2;
+    const diamondSize = 60;
     
     // Determine condition color and text
     let conditionColor, conditionText;
@@ -442,12 +532,16 @@ class WorkflowVisualizer {
         conditionText = '';
     }
     
+    // Calculate path midpoint between diamond and target
+    const midX = (diamondX + diamondSize/2 + targetX) / 2;
+    const midY = (diamondY + targetY) / 2;
+    
     // Draw path from diamond to target
     const diamondToTarget = d3.line().curve(d3.curveBasis)([
       [diamondX + diamondSize/2, diamondY],
-      [(diamondX + diamondSize/2 + targetLeft) / 2, diamondY],
-      [(diamondX + diamondSize/2 + targetLeft) / 2, targetMidY],
-      [targetLeft, targetMidY]
+      [midX, diamondY],
+      [midX, targetY],
+      [targetX, targetY]
     ]);
     
     this.g.append('path')
@@ -461,8 +555,8 @@ class WorkflowVisualizer {
     if (conditionText) {
       this.g.append('text')
         .attr('class', 'condition-label')
-        .attr('x', (diamondX + diamondSize/2 + targetLeft) / 2)
-        .attr('y', ((diamondY + targetMidY) / 2) - 5)
+        .attr('x', midX)
+        .attr('y', midY - 5)
         .attr('text-anchor', 'middle')
         .attr('fill', conditionColor)
         .attr('font-size', '10px')
@@ -474,8 +568,8 @@ class WorkflowVisualizer {
     if (edge.label) {
       this.g.append('text')
         .attr('class', 'event-label')
-        .attr('x', (diamondX + diamondSize/2 + targetLeft) / 2)
-        .attr('y', ((diamondY + targetMidY) / 2) + 10)
+        .attr('x', midX)
+        .attr('y', midY + 10)
         .attr('text-anchor', 'middle')
         .attr('fill', conditionColor)
         .attr('font-size', '9px')
@@ -483,20 +577,16 @@ class WorkflowVisualizer {
     }
   }
   
-  drawStandardEdge(source, target, edge, sourceX, sourceY, targetX, targetY, sourceHeight) {
-    // Calculate path coordinates
-    const sourceRight = sourceX + this.nodeWidth;
-    const sourceMidY = sourceY + (sourceHeight || this.nodeHeight) / 2;
-    const targetLeft = targetX;
-    const targetMidY = targetY + this.nodeHeight / 2;
-    const midX = (sourceRight + targetLeft) / 2;
+  drawStandardEdge(sourceRight, sourceMidY, targetX, targetY, edge) {
+    // Calculate path midpoint
+    const midX = (sourceRight + targetX) / 2;
     
     // Create a regular curved path for standard edges
     const path = d3.line().curve(d3.curveBasis)([
       [sourceRight, sourceMidY],
       [midX, sourceMidY],
-      [midX, targetMidY],
-      [targetLeft, targetMidY]
+      [midX, targetY],
+      [targetX, targetY]
     ]);
     
     // Draw the edge
@@ -523,10 +613,12 @@ class WorkflowVisualizer {
           labelColor = '#2196F3'; // Blue
       }
       
+      const midY = (sourceMidY + targetY) / 2;
+      
       this.g.append('text')
         .attr('class', 'event-label')
         .attr('x', midX)
-        .attr('y', (sourceMidY + targetMidY) / 2 - 10)
+        .attr('y', midY - 10)
         .attr('text-anchor', 'middle')
         .attr('fill', labelColor)
         .text(edge.label);
@@ -542,9 +634,12 @@ class WorkflowVisualizer {
     
     if (!edge) return;
     
-    // The main drawEdge logic is now handled in renderChildren
-    // This method is kept for backward compatibility
-    this.drawStandardEdge(source, target, edge, sourceX, sourceY, targetX, targetY, sourceHeight);
+    const sourceRight = sourceX + this.nodeWidth;
+    const sourceMidY = sourceY + (sourceHeight || this.nodeHeight) / 2;
+    const targetMidY = targetY + this.nodeHeight / 2;
+    
+    // Use the updated method
+    this.drawStandardEdge(sourceRight, sourceMidY, targetX, targetMidY, edge);
   }
   
   toggleNode(node, x, y) {
