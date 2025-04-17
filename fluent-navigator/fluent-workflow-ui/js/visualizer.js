@@ -645,8 +645,7 @@ class WorkflowVisualizer {
     // If expanding, center the view on this node
     if (this.expandedNodes.has(node.id)) {
       const transform = d3.zoomIdentity
-        .translate(this.width / 2 - x - this.nodeWidth / 2, this.height / 2 - y - this.nodeHeight / 2)
-        .scale(0.8);
+        .translate(this.width / 2 - x - this.nodeWidth, this.height / 2 - y - this.nodeHeight / 2)
       
       this.svg.transition()
         .duration(750)
