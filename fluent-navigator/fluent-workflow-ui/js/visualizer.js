@@ -23,6 +23,9 @@ class WorkflowVisualizer {
     // Track expanded nodes
     this.expandedNodes = new Set();
     
+    // Track all rendered nodes and their positions to prevent recursion
+    this.renderedNodePositions = new Map();
+    
     // Setup arrow marker for links
     this.setupArrowMarker();
     
@@ -34,6 +37,8 @@ class WorkflowVisualizer {
   
   clear() {
     this.g.selectAll('*').remove();
+    // Clear the rendered node positions when clearing the graph
+    this.renderedNodePositions.clear();
   }
   
   setupArrowMarker() {
@@ -77,6 +82,15 @@ class WorkflowVisualizer {
   }
   
   renderNode(node, x, y) {
+    // Check if this node has already been rendered elsewhere - prevent recursion
+    if (this.renderedNodePositions.has(node.id)) {
+      this.drawReferenceNode(node, x, y);
+      return;
+    }
+    
+    // Store this node's position
+    this.renderedNodePositions.set(node.id, {x, y});
+    
     const isExpanded = this.expandedNodes.has(node.id);
     
     // Get ruleset data
@@ -258,6 +272,96 @@ class WorkflowVisualizer {
     
     // Store the dynamic height for later use
     node.dynamicHeight = dynamicHeight;
+  }
+  
+  // Add new method to draw a reference node
+  drawReferenceNode(node, x, y) {
+    // Get the original position of this node
+    const originalPos = this.renderedNodePositions.get(node.id);
+    if (!originalPos) return;
+    
+    // Create a simplified reference node
+    const g = this.g.append('g')
+      .attr('class', `node reference ${node.type}`)
+      .attr('id', `node-ref-${node.id}`)
+      .attr('transform', `translate(${x},${y})`)
+      .attr('data-node-id', node.id)
+      .attr('data-reference', 'true');
+    
+    // Create a smaller reference box with dashed outline
+    g.append('rect')
+      .attr('width', this.nodeWidth * 0.8)
+      .attr('height', 60)
+      .attr('rx', 5)
+      .attr('ry', 5)
+      .attr('stroke-dasharray', '5,5')
+      .attr('fill', '#f8f8f8')
+      .attr('stroke', '#666');
+    
+    // Add node name
+    g.append('text')
+      .attr('x', 10)
+      .attr('y', 20)
+      .attr('font-weight', 'bold')
+      .text(node.name);
+    
+    // Add reference indicator
+    g.append('text')
+      .attr('x', this.nodeWidth * 0.8 - 10)
+      .attr('y', 20)
+      .attr('text-anchor', 'end')
+      .attr('font-size', '12px')
+      .attr('fill', '#666')
+      .text('Reference');
+    
+    // Add "Click to go to" text
+    g.append('text')
+      .attr('x', 10)
+      .attr('y', 40)
+      .attr('font-size', '12px')
+      .text('Reference to existing node');
+    
+    // Add click handler to navigate to the original node
+    g.style('cursor', 'pointer')
+      .on('click', () => {
+        // Navigate to the original node position
+        const transform = d3.zoomIdentity
+          .translate(this.width * 0.3 - originalPos.x, this.height / 2 - originalPos.y - this.nodeHeight / 2)
+          .scale(0.8);
+        
+        this.svg.transition()
+          .duration(750)
+          .call(this.zoom.transform, transform);
+      });
+    
+    // Draw a curved path connecting to the original node
+    this.drawReferenceConnector(x, y, originalPos.x, originalPos.y);
+  }
+  
+  drawReferenceConnector(fromX, fromY, toX, toY) {
+    // Calculate midpoints for the curve
+    const midX = (fromX + toX) / 2;
+    const midY = (fromY + toY) / 2;
+    
+    // Calculate control points for a nice curve
+    const controlPoints = [
+      [fromX + this.nodeWidth * 0.8, fromY + 30], // Start from right of reference node
+      [midX, midY - 100], // Control point 1 (above the midpoint)
+      [midX, midY + 100], // Control point 2 (below the midpoint)
+      [toX, toY + this.nodeHeight / 2] // End at original node
+    ];
+    
+    // Create a curved path
+    const path = d3.line().curve(d3.curveBasis)(controlPoints);
+    
+    // Draw the reference connector path
+    this.g.append('path')
+      .attr('d', path)
+      .attr('class', 'reference-link')
+      .attr('stroke', '#999')
+      .attr('stroke-dasharray', '5,5')
+      .attr('fill', 'none')
+      .attr('marker-end', 'url(#arrowhead)');
   }
   
   renderChildren(parentNode, parentX, parentY, parentHeight) {
