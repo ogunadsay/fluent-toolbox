@@ -1,8 +1,9 @@
 class WorkflowParser {
-  constructor() {
+  constructor(startingPoints = {}) {
     this.nodeMap = new Map();
     this.edges = [];
     this.typeRoots = {};
+    this.startingPoints = startingPoints; // Add configurable starting points
   }
 
   parseJSON(jsonString) {
@@ -24,6 +25,14 @@ class WorkflowParser {
       console.error("Invalid workflow structure");
       return null;
     }
+
+    // Extract all unique entity types
+    const entityTypes = new Set();
+    workflow.rulesets.forEach(ruleset => {
+      if (ruleset.type) {
+        entityTypes.add(ruleset.type);
+      }
+    });
 
     // First pass: create nodes for all rulesets
     workflow.rulesets.forEach((ruleset) => {
@@ -48,8 +57,10 @@ class WorkflowParser {
 
       this.nodeMap.set(nodeId, node);
 
-      // If this is a CREATE ruleset, mark it as a root for its type
-      if (ruleset.name === "CREATE") {
+      // If this matches the configured starting point for this type, mark it as a root
+      const defaultStartingPoint = "CREATE"; // Fallback to CREATE if not specified
+      const startingPoint = this.startingPoints[ruleset.type] || defaultStartingPoint;
+      if (ruleset.name === startingPoint) {
         this.typeRoots[ruleset.type] = node;
       }
     });
@@ -113,6 +124,7 @@ class WorkflowParser {
       edges: this.edges,
       rootNodes: Object.values(this.typeRoots),
       typeRoots: this.typeRoots,
+      entityTypes: Array.from(entityTypes), // Return unique entity types
     };
   }
 

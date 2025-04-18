@@ -16,18 +16,19 @@
         <button id="visualize-btn">Visualize</button>
         <button id="reset-btn">Reset</button>
       </div>
-      <div class="legend">
-        <h3>Entity Types</h3>
-        <div class="legend-item"><span class="color-box order"></span>ORDER</div>
-        <div class="legend-item"><span class="color-box fulfilment"></span>FULFILMENT</div>
-        <div class="legend-item"><span class="color-box article"></span>ARTICLE</div>
-        <div class="legend-item"><span class="color-box consignment"></span>CONSIGNMENT</div>
-        <div class="legend-item"><span class="color-box fulfilment-choice"></span>FULFILMENT_CHOICE</div>
-      </div>
+      
       <div class="help-section">
         <h3>Tips</h3>
         <p><strong>Left-click</strong> on a node to expand/collapse connections</p>
         <p><strong>Right-click</strong> on a node to see detailed information</p>
+      </div>
+      <div class="starting-points-config">
+        <h3>Starting Points</h3>
+        <p>Define which ruleset name is the starting point for each entity type:</p>
+        <div id="starting-points-container">
+          <!-- Dynamic starting point inputs will be added here -->
+        </div>
+        <button id="update-starting-points">Update</button>
       </div>
     </div>
     <div class="main-content">

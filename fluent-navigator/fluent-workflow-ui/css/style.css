@@ -153,6 +153,12 @@ svg {
   stroke: #00BCD4;
 }
 
+/* Add dynamic type colors */
+.node rect:first-of-type {
+  fill: #f5f5f5;
+  stroke: #757575;
+}
+
 .link {
   fill: none;
   stroke: #aaa;
@@ -164,7 +170,8 @@ svg {
   fill: #495057;
 }
 
-.legend {
+/* Remove the legend section */
+/* .legend {
   margin-top: 20px;
 }
 
@@ -183,28 +190,33 @@ svg {
 }
 
 .color-box.order {
-  background-color: #e3f2fd;
-  border: 1px solid #2196F3;
+  background-color: #e3f2fd; 
+} */
+
+/* Add new styles for starting point configuration */
+.starting-points-config {
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
 }
 
-.color-box.fulfilment {
-  background-color: #e8f5e9;
-  border: 1px solid #4CAF50;
+.starting-point-row {
+  display: flex;
+  margin-bottom: 8px;
+  align-items: center;
 }
 
-.color-box.article {
-  background-color: #fff3e0;
-  border: 1px solid #FF9800;
+.starting-point-type {
+  width: 40%;
+  font-weight: bold;
 }
 
-.color-box.consignment {
-  background-color: #f3e5f5;
-  border: 1px solid #9C27B0;
-}
-
-.color-box.fulfilment-choice {
-  background-color: #e0f7fa;
-  border: 1px solid #00BCD4;
+.starting-point-input {
+  width: 60%;
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
 }
 
 /* Detail sidebar styling */
@@ -243,7 +255,7 @@ svg {
   cursor: pointer;
 }
 
-.close-btn:hover {
+close-btn:hover {
   color: #333;
 }
 

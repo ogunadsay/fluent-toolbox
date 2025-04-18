@@ -1,46 +1,86 @@
-document.addEventListener('DOMContentLoaded', () => {
-  // Initialize parser and visualizer
-  const parser = new WorkflowParser();
-  const visualizer = new WorkflowVisualizer('workflow-svg');
+// Initialize with default starting points
+let startingPoints = {};
+const parser = new WorkflowParser(startingPoints);
+const visualizer = new WorkflowVisualizer('workflow-svg');
+
+// Function to update starting point inputs in UI
+function updateStartingPointInputs(entityTypes) {
+  const container = document.getElementById('starting-points-container');
+  container.innerHTML = ''; // Clear current inputs
   
-  // DOM elements
-  const jsonInput = document.getElementById('json-input');
-  const visualizeBtn = document.getElementById('visualize-btn');
-  const resetBtn = document.getElementById('reset-btn');
-  const zoomInBtn = document.getElementById('zoom-in');
-  const zoomOutBtn = document.getElementById('zoom-out');
-  const fitScreenBtn = document.getElementById('fit-screen');
-  
-  // Event listeners
-  visualizeBtn.addEventListener('click', () => {
-    const jsonText = jsonInput.value.trim();
-    if (!jsonText) {
-      alert('Please paste a workflow template JSON in the textarea.');
-      return;
-    }
+  entityTypes.forEach(type => {
+    const row = document.createElement('div');
+    row.className = 'starting-point-row';
     
-    try {
-      const graphData = parser.parseJSON(jsonText);
-      if (graphData) {
-        visualizer.renderGraph(graphData);
-        visualizer.fitToScreen();
-      } else {
-        alert('Could not parse the workflow template. Please check the format.');
-      }
-    } catch (error) {
-      console.error('Visualization error:', error);
-      alert('Error visualizing the workflow: ' + error.message);
+    const typeLabel = document.createElement('div');
+    typeLabel.className = 'starting-point-type';
+    typeLabel.textContent = type;
+    
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'starting-point-input';
+    input.id = `starting-point-${type}`;
+    input.value = startingPoints[type] || 'CREATE'; // Default to CREATE
+    
+    row.appendChild(typeLabel);
+    row.appendChild(input);
+    container.appendChild(row);
+  });
+}
+
+// Function to collect starting points from inputs
+function collectStartingPoints() {
+  const inputs = document.querySelectorAll('.starting-point-input');
+  const newStartingPoints = {};
+  
+  inputs.forEach(input => {
+    const type = input.id.replace('starting-point-', '');
+    const value = input.value.trim();
+    if (value) {
+      newStartingPoints[type] = value;
     }
   });
   
-  resetBtn.addEventListener('click', () => {
-    jsonInput.value = '';
-    visualizer.clear();
+  return newStartingPoints;
+}
+
+// Function to visualize the workflow
+function visualizeWorkflow() {
+  const jsonInput = document.getElementById('json-input').value;
+  if (!jsonInput) return;
+  
+  const graphData = parser.parseJSON(jsonInput);
+  if (graphData) {
+    visualizer.renderGraph(graphData);
+    
+    // Update starting point inputs based on entity types
+    updateStartingPointInputs(graphData.entityTypes);
+  }
+}
+
+// Add event listeners
+document.addEventListener('DOMContentLoaded', () => {
+  // Visualize button
+  document.getElementById('visualize-btn').addEventListener('click', visualizeWorkflow);
+  
+  // Update starting points button
+  document.getElementById('update-starting-points').addEventListener('click', () => {
+    startingPoints = collectStartingPoints();
+    parser.startingPoints = startingPoints;
+    visualizeWorkflow();
   });
   
-  zoomInBtn.addEventListener('click', () => visualizer.zoomIn());
-  zoomOutBtn.addEventListener('click', () => visualizer.zoomOut());
-  fitScreenBtn.addEventListener('click', () => visualizer.fitToScreen());
+  // Reset button
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    document.getElementById('json-input').value = '';
+    visualizer.clear();
+    document.getElementById('starting-points-container').innerHTML = '';
+  });
+  
+  // Zoom controls
+  document.getElementById('zoom-in').addEventListener('click', () => visualizer.zoomIn());
+  document.getElementById('zoom-out').addEventListener('click', () => visualizer.zoomOut());
+  document.getElementById('fit-screen').addEventListener('click', () => visualizer.fitToScreen());
 
   // Pre-populate the textarea with template.json content
   fetch('template.json')
@@ -49,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return response.text();
     })
     .then(data => {
-      jsonInput.value = data;
+      document.getElementById('json-input').value = data;
     })
     .catch(error => {
       console.log('Could not load template:', error);

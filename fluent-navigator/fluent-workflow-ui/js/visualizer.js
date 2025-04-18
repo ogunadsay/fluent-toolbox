@@ -186,34 +186,47 @@ class WorkflowVisualizer {
     
     // Display rules - show all rules instead of limiting to 3
     if (ruleset && ruleset.rules && ruleset.rules.length > 0) {
+      // Create a more compact display for rules
+      const rulesPerRow = 2; // Show 2 rules per row
       ruleset.rules.forEach((rule, i) => {
+        const row = Math.floor(i / rulesPerRow);
+        const col = i % rulesPerRow;
+        const xPos = 20 + (col * (this.nodeWidth / 2 - 20));
+        
         // Rule name
         g.append('text')
-          .attr('x', 20)
-          .attr('y', yOffset + i * 15) // Reduced from 40 to 15
+          .attr('x', xPos)
+          .attr('y', yOffset + row * 15)
           .attr('font-size', '10px')
           .text(`${rule.name.split('.').pop()}`);
           
         // Add colored circle indicator if rule has props
         if (rule.props) {
           g.append('circle')
-            .attr('cx', 15)
-            .attr('cy', yOffset + i * 15 - 3)
+            .attr('cx', xPos - 5)
+            .attr('cy', yOffset + row * 15 - 3)
             .attr('r', 3)
             .attr('fill', '#2196F3'); // Blue
         }
       });
+      
+      // Update yOffset based on the number of rows
+      const rows = Math.ceil(ruleset.rules.length / rulesPerRow);
+      yOffset += rows * 15;
     } else {
       g.append('text')
         .attr('x', 20)
         .attr('y', yOffset)
         .attr('font-size', '10px')
         .text('No rules');
+      
+      yOffset += 15;
     }
+    
     // Triggers section
     g.append('text')
       .attr('x', 10)
-      .attr('y', yOffset + 15 * ruleset.rules.length)
+      .attr('y', yOffset)
       .attr('font-size', '12px')
       .attr('font-weight', 'bold')
       .text('Triggers:');
