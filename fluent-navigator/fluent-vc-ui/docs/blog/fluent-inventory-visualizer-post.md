@@ -1,6 +1,6 @@
 # Bridging the Translation Gap: Visualizing Your Inventory Network
 
-[Insert Hero Image: Fluent Inventory Visualizer showing a global retail hierarchy]
+![Hero Image: Fluent Inventory Visualizer showing a global retail hierarchy](./assets/hero-visualizer.png)
 
 Managing a global fulfillment network is a balancing act of precision and speed. At the heart of this complexity in Fluent Commerce is the Virtual Catalogue—the "brain" that determines how inventory flows from stores and warehouses to the customer.
 
@@ -8,7 +8,7 @@ But as networks scale, this brain often becomes a "black box."
 
 ### The Complexity Tax: When JSON Becomes a Barrier
 
-[Insert Comparison Image: Split screen showing Raw JSON vs. Interactive Treemap]
+![Comparison Image: Split screen showing Raw JSON vs. Interactive Treemap](./assets/json-vs-visualizer.png)
 
 In a typical large-scale implementation, Virtual Catalogue configurations can span thousands of lines of nested JSON. For an Operations Manager, this isn't just a technical detail—it's a massive "Translation Gap."
 
@@ -30,14 +30,15 @@ By turning raw data into a visual hierarchy, we’ve moved from "decoding" to "d
 The Visualizer uses an interactive treemap (powered by D3.js) to provide a seamless "Macro-to-Micro" experience:
 
 #### 1. Hierarchical Drill-Down
-[Insert GIF: User clicking through the treemap to drill down into a specific network]
+![Drill-down view showing a specific network expanded](./assets/drill-down-visualizer.png)
 
 Navigate from a global view of all Retailers down to specific Virtual Catalogues, Networks, and individual Locations in seconds. No more digging through files; just click to explore.
 
 #### 2. Instant Outlier Detection
-[Insert Image: Close-up of an "outlier" node highlighted in the visualizer]
+![Close-up of a node with details visible in tooltip](./assets/outlier-visualizer.png)
 
 The tool uses consistent color-coding and dynamic sizing to help you spot misconfigurations at a glance. If a store is in the wrong network, it stands out visually before it ever causes a fulfillment error.
+
 
 #### 3. Live Data Validation
 Paste your latest configuration JSON and see it come to life instantly. This allows for rapid prototyping and validation of new fulfillment rules before they are rolled out to production.
