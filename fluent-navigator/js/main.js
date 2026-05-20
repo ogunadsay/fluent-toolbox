@@ -1,4 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // Update current year in footer
+  const yearElement = document.getElementById('current-year');
+  if (yearElement) {
+    yearElement.textContent = new Date().getFullYear();
+  }
+
   // Get all cards
   const cards = document.querySelectorAll('.card');
   
