@@ -14,3 +14,23 @@ When every fulfillment rule is buried in code, answering simple operational ques
 *   "Why is an order being routed to a store 500 miles away instead of the one next door?"
 
 The result? Hours wasted in meetings trying to "decode" configurations and a constant risk of "lost in translation" errors that impact the bottom line.
+
+## Introducing the Fluent Inventory Visualizer: Turning Chaos into Clarity
+
+We built the **Fluent Inventory Visualizer** to bridge this gap. It’s a "Single Pane of Glass" that transforms abstract configuration into an interactive, actionable map. 
+
+By turning raw data into a visual hierarchy, we’ve moved from "decoding" to "deciding."
+
+### Key Features: From Global Strategy to Local Detail
+
+The Visualizer uses an interactive treemap (powered by D3.js) to provide a seamless "Macro-to-Micro" experience:
+
+#### 1. Hierarchical Drill-Down
+Navigate from a global view of all Retailers down to specific Virtual Catalogues, Networks, and individual Locations in seconds. No more digging through files; just click to explore.
+
+#### 2. Instant Outlier Detection
+The tool uses consistent color-coding and dynamic sizing to help you spot misconfigurations at a glance. If a store is in the wrong network, it stands out visually before it ever causes a fulfillment error.
+
+#### 3. Live Data Validation
+Paste your latest configuration JSON and see it come to life instantly. This allows for rapid prototyping and validation of new fulfillment rules before they are rolled out to production.
+
